@@ -213,6 +213,60 @@ Correct runs out of 3:
 
 Raw data: [`results.md`](evals/results/results.md) and [`results.json`](evals/results/results.json).
 
+### Are these results still current?
+
+Yes, for these 12 incidents. The evaluation ran on commit `4a14410`. We checked every later change:
+
+| Check | Result |
+|---|---|
+| Agent prompts, model settings, budget, run setup | No lines changed |
+| Workflow, baseline, evidence rules, data contracts | Only new fields that record data, such as Verifier labels. No decision logic changed |
+| Tool changes (log cap, partial faults) | Apply only to more than 20 matching logs, or partial faults with `times`. The 12 incidents use neither |
+| Replay of 1,632 tool calls, old code against new | 0 differences |
+
+The same model can still answer differently from run to run, which is why each incident ran 3 times.
+
+### Future work: per-agent evaluation
+
+**Not built yet, because it needs paid model runs.** To control evaluation cost, we stopped making model calls. The current results show **what** happened, such as 69% against 89%. They do not show **which agent** lost each answer.
+
+| Level | Evaluated now | What we have | What is missing |
+|---|---|---|---|
+| End to end | Yes, real model | Accuracy, grounding, tool calls, latency, tokens over 72 runs | Only the final report is scored |
+| Orchestrator | No | Nothing | Were the right tasks planned, in the right order? |
+| Observability and Dependency | No | Nothing | Did they retrieve the key evidence? |
+| Reasoning | Partly | Top hypothesis right in 26 of 30 conclusive runs | Was the right cause among any of its hypotheses? |
+| Verifier | No | Labels are saved from now on, but no saved run has them | How accurate are its labels, including symptom vs cause? |
+| Critic | No | Nothing | Did it accept right answers and push back on wrong ones? It accepted INC-12's wrong answer |
+| Reporting | No | One invented version number, seen by hand | Are the actions and summary grounded in evidence? |
+| Tools | Yes, offline | Unit tests, simulated failures, metamorphic tests | Nothing major |
+| Evidence rules | Yes, offline | Rule eval, property tests, metamorphic tests | Nothing major |
+| Calculations | Yes, offline | Audit, plus cross-checks against scikit-learn and SciPy | Nothing |
+| Latency and tokens per step | Partly | Total latency, and tokens per agent from now on | Latency per agent and per step |
+
+**The plan:** score every run as a funnel, one stage at a time. Each failed run then shows the first stage that went wrong, and the totals show which agent loses the most answers.
+
+```
+Key evidence retrieved?          -> Observability and Dependency
+Right cause among hypotheses?    -> Reasoning
+Key rows labelled "supports"?    -> Verifier
+Right cause ranked first?        -> Evidence rules
+Accepted only when right?        -> Critic
+Right final outcome?             -> End to end
+Actions grounded in evidence?    -> Reporting
+Time and tokens at each stage    -> Every agent
+```
+
+The single agent would get the same funnel, with every stage credited to its one agent.
+
+| Step | Cost |
+|---|---|
+| Record each stage's data in every run: retrieved rows, all hypotheses, all Verifier labels, the Critic's verdict, time per agent | No model calls |
+| Build the funnel scoring, tested with fake models | No model calls |
+| Get real per-agent results | **Needs model calls.** Saved runs lack these details, so they cannot be rescored. About 200k tokens for a dev subset, or about 1.5M for all 12 incidents on both systems |
+
+Any provider works: set `AI_PROVIDER` and `AI_MODEL`. Results from a different model cannot be compared directly with the Gemini results above.
+
 ## Learnings
 
 Each change we made, with its measured result before and after. "Dev" results come from the incidents we tuned on, so they show a change worked there, not that it works in general.
