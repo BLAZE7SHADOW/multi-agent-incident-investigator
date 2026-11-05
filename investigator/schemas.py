@@ -7,7 +7,7 @@ stay flat: no unions, free-form dicts or numeric bounds, which providers support
 from operator import add
 from typing import Annotated, Any, Literal, TypedDict
 
-from pydantic import AfterValidator, BaseModel, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 AgentName = Literal["observability", "dependency"]
 Source = Literal["logs", "metrics", "deployments", "dependencies", "history"]
@@ -188,3 +188,60 @@ class InvestigationState(TypedDict, total=False):
     round: int
     stop_reason: str
     report: Report
+
+
+# --- Golden dataset ---
+
+
+class Fault(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str
+    kind: Literal["timeout", "error", "partial"]
+    times: int | None = Field(default=None, description="Failures before recovery; None = always")
+    max_rows: int = Field(default=2, description="Rows returned by a partial fault")
+
+
+class World(BaseModel):
+    """Everything tools can see. Extra fields are rejected so no answer can be stored here."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    logs: list[dict[str, Any]] = []
+    metrics: list[dict[str, Any]] = []
+    deployments: list[dict[str, Any]] = []
+    dependencies: list[dict[str, Any]] = []
+    history: list[dict[str, Any]] = []
+    faults: list[Fault] = []
+
+    def row_ids(self) -> set[str]:
+        tables = (self.logs, self.metrics, self.deployments, self.dependencies, self.history)
+        return {row["id"] for table in tables for row in table}
+
+
+class Truth(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    outcome: Outcome
+    category: CauseCategory
+    component: str = ""
+    key_evidence: list[str] = []
+    trap_component: str = Field(default="", description="The wrong answer this case invites")
+
+
+class GoldenCase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    incident: Incident
+    scenario: str
+    provenance: Literal["synthetic", "production"] = "synthetic"
+    split: Literal["dev", "holdout"] = "dev"
+    world: World
+    truth: Truth
+
+    @model_validator(mode="after")
+    def _check_key_evidence_exists(self) -> "GoldenCase":
+        missing = set(self.truth.key_evidence) - self.world.row_ids()
+        if missing:
+            raise ValueError(f"{self.incident.id}: unknown key_evidence {sorted(missing)}")
+        return self
