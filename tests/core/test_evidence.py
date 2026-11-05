@@ -29,6 +29,8 @@ from investigator.schemas import (
 from investigator.tools import wrap_untrusted
 
 LEDGER = {
+    "top-1": Evidence(id="top-1", source="dependencies", content="api depends on db"),
+    "his-1": Evidence(id="his-1", source="history", content="similar incident last year"),
     "log-1": Evidence(id="log-1", source="logs", content="error"),
     "log-2": Evidence(id="log-2", source="logs", content="error"),
     "met-1": Evidence(id="met-1", source="metrics", content="spike"),
@@ -276,6 +278,38 @@ def test_symptom_rows_do_not_count_as_support():
     result = assess_hypothesis(h, {"log-1": "symptom", "met-1": "symptom"}, LEDGER, [])
     assert result.verified_supporting == [] and result.verified_contradicting == []
     assert (result.verified_ratio, result.net_support, result.confidence) == (0.0, 0, "low")
+
+
+def test_topology_and_history_never_count_as_evidence():
+    h = hypothesis(supporting=["log-1", "met-1", "top-1", "his-1"])
+    labels = {**BOTH, "top-1": "supports", "his-1": "supports"}
+    result = assess_hypothesis(h, labels, LEDGER, [])
+    assert result.verified_supporting == ["log-1", "met-1"]
+    assert (result.net_support, result.verified_ratio, result.confidence) == (2, 1.0, "high")
+
+
+def test_background_rows_cannot_supply_a_second_source_type():
+    h = hypothesis(supporting=["log-1", "top-1", "his-1"])
+    labels = {"log-1": "supports", "top-1": "supports", "his-1": "supports"}
+    assert assess_hypothesis(h, labels, LEDGER, []).confidence == "low"
+
+
+def test_background_rows_cannot_contradict_either():
+    labels = {**BOTH, "top-1": "contradicts", "his-1": "contradicts"}
+    result = assess_hypothesis(hypothesis(), labels, LEDGER, [])
+    assert result.verified_contradicting == [] and result.confidence == "high"
+
+
+def test_topology_cannot_outvote_real_observations():
+    wrong = hypothesis(id="wrong", supporting=["top-1", "his-1", "log-2", "dep-1"])
+    right = hypothesis(id="right", supporting=["log-1", "met-1"])
+    verification = Verification(
+        verdicts=[
+            verdict("wrong", top_1="supports", his_1="supports", dep_1="supports"),
+            verdict("right", log_1="supports", met_1="supports"),
+        ]
+    )
+    assert rank_hypotheses([wrong, right], verification, LEDGER, [])[0].id == "right"
 
 
 def test_computed_metrics_are_exact():

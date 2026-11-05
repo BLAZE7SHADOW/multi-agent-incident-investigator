@@ -61,7 +61,8 @@ incident is a lead, not proof. Name the component actually at fault. Use categor
 nothing explains the incident.
 - verification: for each hypothesis, label each row that matters: supports (points to this \
 cause's mechanism), contradicts (evidence against it), or symptom (a generic effect any cause \
-could produce).
+could produce). Omit dependency rows and past incidents: they do not show what happened in this \
+incident.
 - verdict: accept if the evidence establishes the leading hypothesis, otherwise insufficient. An \
 honest "insufficient" is a good outcome.
 - summary and actions for an on-call engineer. Link actions to a hypothesis id, and mark any \

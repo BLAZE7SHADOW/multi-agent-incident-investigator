@@ -26,6 +26,7 @@ class RunScore(BaseModel):
     top_component: str = ""
     top_confidence: str = ""
     stop_reason: str = ""
+    outcome_reasons: list[str] = []
     wrong_conclusion: bool = False
     missed_conclusion: bool = False
     fell_for_trap: bool = False
@@ -77,6 +78,7 @@ def score_run(case: Case, report: Report, system: str, repeat: int, latency_s: f
         top_component=top.component if top else "",
         top_confidence=top.confidence if top else "",
         stop_reason=report.stop_reason,
+        outcome_reasons=report.outcome_reasons,
         wrong_conclusion=concluded and not correct,
         missed_conclusion=truth.outcome == "conclusive" and not concluded,
         fell_for_trap=bool(
