@@ -69,7 +69,9 @@ def render(scores: list[RunScore], model: str) -> str:
         lines.append(f"| {label} | " + " | ".join(cells) + " |")
 
     lines.append("\n## Accuracy by split\n")
-    lines.append("Prompts were tuned on INC-01 and INC-08 only. Holdout cases were never used.\n")
+    lines.append(
+        "Prompts and evidence rules were tuned on dev incidents. Holdout incidents were not.\n"
+    )
     lines.append("| Split | " + " | ".join(systems) + " |\n|---|" + "---|" * len(systems))
     for split in sorted({score.split for score in scores}):
         cells = []
