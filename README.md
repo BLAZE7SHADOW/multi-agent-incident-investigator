@@ -16,7 +16,7 @@ We compared the multi-agent system with a single agent that has the same tools, 
 **In short:**
 
 - On the assignment set, v1 multi-agent lost clearly.
-- v2 added tie-breaking and shared findings. On blind cases neither system was tuned on, it tied on accuracy and was safer, but it cost about 24% more tokens and was about 46% slower.
+- v2 added tie-breaking and shared findings. On blind cases neither system was tuned on, it tied on accuracy and was safer, but it cost about 24% more tokens and was about 43% slower.
 - The two evaluations use different incidents and versions, so the change from v1 to v2 cannot be measured from them.
 
 ## Contents
