@@ -35,8 +35,8 @@ The sample is small: 12 incidents, 3 holdout, on one model. We tuned on dev inci
 
 ## Potential improvements
 
-1. Stop counting `unknown` and near-duplicate hypotheses as rivals.
-2. Check timelines in code, such as errors continuing after a rollback.
+1. Re-run the evaluation with the two new rules. Offline, they took the rule eval from 6/13 to 12/13 scenarios correct.
+2. Check how long before an incident a change happened.
 3. Try one agent plus one independent checker.
 4. Weigh evidence instead of counting rows.
 5. Add new unseen incidents, since the holdout has been used.

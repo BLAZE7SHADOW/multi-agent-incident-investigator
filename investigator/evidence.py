@@ -2,6 +2,8 @@
 
 import json
 from collections.abc import Iterable, Mapping, Sequence
+from datetime import datetime, timedelta
+from statistics import mean
 
 from langchain_core.messages import BaseMessage
 
@@ -29,6 +31,8 @@ HIGH_VERIFIED_RATIO = 0.8
 MEDIUM_VERIFIED_RATIO = 0.5
 MIN_SOURCES = 2
 MIN_LEAD = 1
+RECOVERY_RATIO = 0.5  # errors must fall below this share of their peak to count as recovered
+CHANGE_KINDS = {"bad_deploy": "deploy", "config_change": "config"}
 
 # What happened during this incident. Topology and past incidents are useful leads, but they exist
 # whatever the cause, so they can never count for or against a hypothesis.
@@ -137,6 +141,74 @@ def clean_verification(
     return Verification(verdicts=verdicts), grounding
 
 
+def _row(evidence: Evidence) -> dict:
+    try:
+        row = json.loads(evidence.content)
+    except ValueError:
+        return {}
+    return row if isinstance(row, dict) else {}
+
+
+def _missing_change_evidence(
+    hypothesis: Hypothesis, supporting: Iterable[str], ledger: Mapping[str, Evidence]
+) -> str:
+    """A deploy or config cause needs a verified change of that kind on the component blamed."""
+    kind = CHANGE_KINDS.get(hypothesis.category)
+    if kind is None:
+        return ""
+    for row_id in supporting:
+        row = _row(ledger[row_id])
+        if (
+            ledger[row_id].source == "deployments"
+            and row.get("kind") == kind
+            and row.get("service") == hypothesis.component
+        ):
+            return ""
+    return f"no verified {kind} row for {hypothesis.component}"
+
+
+def _split_series(row: dict, at: datetime) -> tuple[list[float], list[float]]:
+    """Metric values at or before a moment, and values after it."""
+    first = datetime.fromisoformat(row["start"])
+    before: list[float] = []
+    after: list[float] = []
+    for index, value in enumerate(row["values"]):
+        moment = first + timedelta(minutes=index * row["step_min"])
+        (before if moment <= at else after).append(value)
+    return before, after
+
+
+def _failed_rollback(hypothesis: Hypothesis, ledger: Mapping[str, Evidence]) -> tuple[str, str]:
+    """A rolled-back change can't be the cause if errors did not fall. Returns (reason, row id)."""
+    if hypothesis.category not in CHANGE_KINDS:
+        return "", ""
+    rows = [(evidence, _row(evidence)) for evidence in ledger.values()]
+    rollbacks = [
+        (row["ts"], evidence.id)
+        for evidence, row in rows
+        if evidence.source == "deployments"
+        and row.get("kind") == "rollback"
+        and row.get("service") == hypothesis.component
+    ]
+    if not rollbacks:
+        return "", ""
+    moment, rollback_id = min(rollbacks)
+    at = datetime.fromisoformat(moment)
+    for evidence, row in rows:
+        if (
+            evidence.source != "metrics"
+            or row.get("service") != hypothesis.component
+            or "error" not in str(row.get("metric", ""))
+        ):
+            continue
+        before, after = _split_series(row, at)
+        peak = max(before, default=0)
+        if peak > 0 and after and mean(after) >= RECOVERY_RATIO * peak:
+            reason = f"{rollback_id} rolled it back, but {evidence.id} shows errors continued"
+            return reason, rollback_id
+    return "", ""
+
+
 def assess_hypothesis(
     hypothesis: Hypothesis,
     labels: Mapping[str, RowLabel],
@@ -149,10 +221,18 @@ def assess_hypothesis(
     contradicting = sorted(row for row, label in observed.items() if label == "contradicts")
     cited = {row for row in hypothesis.supporting if ledger[row].source in OBSERVATIONS}
     verified_ratio = len(cited & set(supporting)) / len(cited) if cited else 0.0
-    sources = {ledger[row].source for row in supporting}
-    net_support = len(supporting) - len(contradicting)
+
+    rollback_reason, rollback_row = _failed_rollback(hypothesis, ledger)
+    if rollback_row and rollback_row not in contradicting:
+        contradicting = sorted([*contradicting, rollback_row])
+    disqualified = _missing_change_evidence(hypothesis, supporting, ledger) or rollback_reason
+
+    counted = [] if disqualified else supporting
+    sources = {ledger[row].source for row in counted}
+    net_support = len(counted) - len(contradicting)
 
     confidence: Confidence = "low"
+    # A disqualified hypothesis counts no support, so the source check below already fails.
     if (
         hypothesis.category != "unknown"
         and len(sources) >= MIN_SOURCES
@@ -169,6 +249,8 @@ def assess_hypothesis(
         verified_ratio=verified_ratio,
         net_support=net_support,
         confidence=confidence,
+        disqualified=disqualified,
+        row_labels=dict(labels),
     )
 
 
@@ -183,7 +265,11 @@ def rank_hypotheses(
     verdicts = verification.verdicts if verification else []
     labels = {v.hypothesis_id: {row.evidence_id: row.label for row in v.rows} for v in verdicts}
     assessed = [assess_hypothesis(h, labels.get(h.id, {}), ledger, failed) for h in hypotheses]
-    return sorted(assessed, key=lambda h: (h.net_support, h.verified_ratio), reverse=True)
+    return sorted(
+        assessed,
+        key=lambda h: (not h.disqualified, h.net_support, h.verified_ratio),
+        reverse=True,
+    )
 
 
 def decide_outcome(
@@ -198,8 +284,14 @@ def decide_outcome(
         reasons.append("the critic did not accept the conclusion")
     if top.confidence == "low":
         reasons.append("the top hypothesis has low confidence")
-    if len(ranked) > 1 and top.net_support - ranked[1].net_support < MIN_LEAD:
-        reasons.append(f"no clear lead over the alternative '{ranked[1].id}'")
+    # "Unknown" and a rewording of the same cause are not competing explanations.
+    rivals = [
+        h
+        for h in ranked[1:]
+        if h.category != "unknown" and (h.category, h.component) != (top.category, top.component)
+    ]
+    if rivals and top.net_support - rivals[0].net_support < MIN_LEAD:
+        reasons.append(f"no clear lead over the alternative '{rivals[0].id}'")
     return ("inconclusive" if reasons else "conclusive"), reasons
 
 
