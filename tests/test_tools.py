@@ -5,6 +5,7 @@ from fakes import ScriptedChatModel, reply
 from langchain.agents import create_agent
 from pydantic import BaseModel, ValidationError
 
+from investigator.guardrails import collect_evidence
 from investigator.schemas import Fault, GoldenCase, ToolResult, World
 from investigator.tools import (
     MAX_ROWS,
@@ -287,3 +288,20 @@ def test_injection_text_stays_inside_the_wrapper():
     result_rows = [r for r in golden.world.logs if "SYSTEM OVERRIDE" in r["msg"]]
     wrapped = wrap_untrusted(ToolResult(tool="query_logs", status="ok", rows=result_rows))
     assert wrapped.endswith("</untrusted_data>") and wrapped.count("</untrusted_data>") == 1
+
+
+async def test_incident_text_is_redacted_before_reaching_the_model():
+    model = ScriptedChatModel(script=[reply("Done", {"summary": "finished"})])
+    agent = create_agent(model, [], response_format=Done, middleware=tool_middleware(retry_delay=0))
+    text = "pasted config: password=hunter2secret from a.person@example.com"
+    await agent.ainvoke({"messages": [{"role": "user", "content": text}]})
+    sent = str(model.calls[-1])
+    assert "hunter2secret" not in sent and "a.person@example.com" not in sent
+
+
+async def test_evidence_ledger_stores_only_redacted_rows():
+    _, message = await run_agent(case("INC-11").world, {"service": "inventory"})
+    evidence, _, _ = collect_evidence([message])
+    stored = str(evidence)
+    assert "sk-live-FAKE000TESTKEY" not in stored and "ops.oncall@example.com" not in stored
+    assert "log-03" in evidence

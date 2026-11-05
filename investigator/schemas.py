@@ -53,6 +53,22 @@ class Usage(BaseModel):
         return self.input_tokens + self.output_tokens
 
 
+class Grounding(BaseModel):
+    """Citation quality as the LLM produced it, before guardrails clean it up."""
+
+    citations: int = 0
+    valid_citations: int = 0
+    downgraded_claims: int = 0
+
+    def __add__(self, other: "Grounding") -> "Grounding":
+        fields = type(self).model_fields
+        return Grounding(**{name: getattr(self, name) + getattr(other, name) for name in fields})
+
+    @property
+    def validity(self) -> float:
+        return self.valid_citations / self.citations if self.citations else 1.0
+
+
 class Incident(BaseModel):
     id: str = Field(pattern=r"^[A-Za-z0-9-]{1,32}$")
     title: str = Field(min_length=1, max_length=200)
@@ -170,6 +186,7 @@ class Report(BaseModel):
     gaps: list[str]
     actions: list[RecommendedAction]
     usage: Usage
+    grounding: Grounding = Grounding()
 
 
 def _merge(left: dict, right: dict) -> dict:
@@ -181,6 +198,8 @@ class InvestigationState(TypedDict, total=False):
     tasks: Annotated[dict[str, Task], _merge]
     evidence: Annotated[dict[str, Evidence], _merge]
     gaps: Annotated[list[str], add]
+    failed_tools: Annotated[list[str], add]
+    grounding: Annotated[Grounding, add]
     trace: Annotated[list[str], add]
     usage: Annotated[Usage, add]
     hypotheses: list[Hypothesis]
