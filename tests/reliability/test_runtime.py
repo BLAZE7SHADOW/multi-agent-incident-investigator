@@ -2,7 +2,7 @@ from fakes import RoutingChatModel, reply
 
 from cli import render
 from investigator.tools import load_cases
-from reliability.runtime import run_incident
+from reliability.runtime import run_baseline, run_incident
 
 CASE = next(c for c in load_cases() if c.incident.id == "INC-11")
 SECRET = "sk-live-FAKE000TESTKEY"
@@ -66,3 +66,27 @@ async def test_report_renders_for_a_person():
     text = render(report)
     assert "CONCLUSIVE" in text and "memory leak" in text and "[needs approval]" in text
     assert SECRET not in text
+
+
+async def test_baseline_also_runs_with_safety_on():
+    rows = [{"evidence_id": "log-01", "label": "supports", "reason": "r"}]
+    final = {
+        "claims": [],
+        "gaps": [],
+        "hypotheses": [HYPOTHESIS],
+        "verification": [{"hypothesis_id": "h1", "rows": rows}],
+        "verdict": "insufficient",
+        "summary": "s",
+        "actions": [RISKY],
+    }
+    fake = RoutingChatModel(
+        replies={
+            "Incident": [
+                reply("query_logs", {"service": "inventory"}),
+                reply("BaselineOutput", final),
+            ]
+        }
+    )
+    report = await run_baseline(CASE.incident, CASE.world, model=fake)
+    assert all(SECRET not in str(m) and EMAIL not in str(m) for _, m in fake.calls)
+    assert report.actions[0].requires_human_approval is True

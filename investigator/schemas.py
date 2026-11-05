@@ -175,7 +175,27 @@ class ReportDraft(BaseModel):
     actions: list[Action]
 
 
-LLM_OUTPUT_SCHEMAS = (Finding, Plan, HypothesisSet, Verification, Critique, ReportDraft)
+class BaselineOutput(BaseModel):
+    """Everything the single-agent baseline must produce in one reply."""
+
+    claims: list[Claim]
+    gaps: list[str]
+    hypotheses: list[Hypothesis]
+    verification: list[HypothesisVerdict]
+    verdict: Literal["accept", "insufficient"]
+    summary: str
+    actions: list[Action]
+
+
+LLM_OUTPUT_SCHEMAS = (
+    Finding,
+    Plan,
+    HypothesisSet,
+    Verification,
+    Critique,
+    ReportDraft,
+    BaselineOutput,
+)
 
 
 # --- Built by code, never by an LLM ---
