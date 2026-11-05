@@ -43,8 +43,19 @@ def _ledger(incident_id: str, metric_values: dict) -> dict[str, Evidence]:
     return ledger
 
 
+def _inline_ledger(rows: list[dict]) -> dict[str, Evidence]:
+    ledger = {}
+    for row in rows:
+        fields = {k: (str(v) if k == "ts" else v) for k, v in row.items() if k != "source"}
+        ledger[row["id"]] = Evidence(id=row["id"], source=row["source"], content=json.dumps(fields))
+    return ledger
+
+
 def run_scenario(scenario: dict) -> dict:
-    ledger = _ledger(scenario["incident"], scenario.get("metric_values", {}))
+    if "rows" in scenario:
+        ledger = _inline_ledger(scenario["rows"])
+    else:
+        ledger = _ledger(scenario["incident"], scenario.get("metric_values", {}))
     hypotheses, verdicts = [], []
     for spec in scenario["hypotheses"]:
         supports, contradicts = spec.get("supports", []), spec.get("contradicts", [])
@@ -74,8 +85,8 @@ def run_scenario(scenario: dict) -> dict:
         correct = outcome == "inconclusive"
     return {
         "name": scenario["name"],
+        "set": scenario["set"],
         "origin": scenario["origin"],
-        "known_gap": scenario.get("known_gap", False),
         "expected": expected,
         "outcome": outcome,
         "top": f"{top.category}/{top.component}",
@@ -120,16 +131,32 @@ def _fmt(value) -> str:
     return "n/a" if value is None else f"{value:.0%}"
 
 
+SETS = ("reconstructed", "control", "adversarial")
+
+
 def render(after: list[dict], before: list[dict] | None = None) -> str:
     columns = [("Before", before), ("After", after)] if before else [("Result", after)]
+    names = " | ".join(name for name, _ in columns)
     lines = [
         "# Evidence rule evaluation\n",
         "Scores the evidence rules alone on scenarios from `data/rule_eval.yaml`, with no model "
         "calls. Labels are what a perfect Verifier would give, so this shows what the rules "
-        "decide, not what the full system would do with a real model.\n",
-        "| Metric | " + " | ".join(name for name, _ in columns) + " |",
-        "|---|" + "---|" * len(columns),
+        "decide, not what the full system would do with a real model. Expected answers were "
+        "written by the developer.\n",
+        "## Correct by set\n",
+        f"| Set | Scenarios | {names} |",
+        "|---|---|" + "---|" * len(columns),
     ]
+    for name in SETS:
+        indexes = [i for i, r in enumerate(after) if r["set"] == name]
+        if not indexes:
+            continue
+        cells = [
+            f"{sum(results[i]['correct'] for i in indexes)}/{len(indexes)}"
+            for _, results in columns
+        ]
+        lines.append(f"| {name} | {len(indexes)} | " + " | ".join(cells) + " |")
+    lines += ["\n## All scenarios\n", f"| Metric | {names} |", "|---|" + "---|" * len(columns)]
     stats = [confusion(results) for _, results in columns]
     for label, key, fmt in [
         ("Scenarios correct", "accuracy", _fmt),
@@ -147,7 +174,7 @@ def render(after: list[dict], before: list[dict] | None = None) -> str:
         "Precision = TP / (TP + FP). Recall = TP / (TP + FN). A wrong conclusion counts as both a "
         "false positive and a false negative, because it also misses the right cause.\n",
         "## Scenarios\n",
-        "| Scenario | Origin | " + " | ".join(name for name, _ in columns) + " |",
+        f"| Scenario | Set | {names} |",
         "|---|---|" + "---|" * len(columns),
     ]
     for index, result in enumerate(after):
@@ -156,8 +183,7 @@ def render(after: list[dict], before: list[dict] | None = None) -> str:
             r = results[index]
             mark = "✓" if r["correct"] else "✗"
             cells.append(f"{mark} {r['outcome']}, {r['top']}, net {r['net']}")
-        gap = " (known gap)" if result["known_gap"] else ""
-        lines.append(f"| {result['name']}{gap} | {result['origin']} | " + " | ".join(cells) + " |")
+        lines.append(f"| {result['name']} | {result['set']} | " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
 
 

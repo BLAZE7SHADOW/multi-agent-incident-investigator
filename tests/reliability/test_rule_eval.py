@@ -11,35 +11,35 @@ RESULTS = evaluate()
 BY_NAME = {r["name"]: r for r in RESULTS}
 
 
-def test_every_scenario_except_the_known_gap_is_now_correct():
-    failing = [r["name"] for r in RESULTS if not r["correct"]]
-    assert failing == [r["name"] for r in RESULTS if r["known_gap"]]
+def by_set(name):
+    group = [r for r in RESULTS if r["set"] == name]
+    return sum(r["correct"] for r in group), len(group)
+
+
+def test_scenario_sets_are_complete():
+    assert by_set("reconstructed")[1] == 5
+    assert by_set("control")[1] == 8
+    assert by_set("adversarial")[1] == 8
+
+
+def test_current_rules_by_set():
+    """A record of today's rules. A change that moves these numbers must be explained."""
+    assert by_set("reconstructed") == (0, 5)  # every rebuilt evaluation failure still fails
+    assert by_set("control") == (6, 8)  # fails INC-08 deploy guess and the old INC-10 deploy
+    assert by_set("adversarial") == (6, 8)  # fails the deploy-tool-down and http_5xx cases
 
 
 @pytest.mark.parametrize(
-    ("name", "top"),
+    "name",
     [
-        ("INC-11, unevidenced config rival ties the real cause", "resource_exhaustion/inventory"),
-        ('INC-11, "unknown" rival ties the real cause', "resource_exhaustion/inventory"),
-        (
-            "INC-09, unevidenced config rival with 6 rows ties the real cause",
-            "resource_exhaustion/auth",
-        ),
-        ("INC-12, rolled-back deploy beats the real cause by 1", "resource_exhaustion/postgres"),
-        (
-            "INC-12, rolled-back deploy beats the real cause by 1, smaller",
-            "resource_exhaustion/postgres",
-        ),
+        "Deploy logged under another name (payments-api)",
+        "Change was a feature flag",
+        "Two deploys, and the wrong one was rolled back",
+        "Only one region was rolled back",
     ],
 )
-def test_each_reconstructed_failure_is_fixed(name, top):
-    result = BY_NAME[name]
-    assert (result["outcome"], result["top"]) == ("conclusive", top)
-
-
-def test_known_gap_is_still_a_wrong_conclusion():
-    gap = next(r for r in RESULTS if r["known_gap"])
-    assert gap["outcome"] == "conclusive" and not gap["correct"]
+def test_cases_the_removed_fixes_broke_are_handled(name):
+    assert BY_NAME[name]["correct"]
 
 
 def test_confusion_counts_by_hand():
@@ -60,14 +60,15 @@ def test_confusion_counts_by_hand():
 
 
 def test_current_numbers_by_hand():
-    # Should conclude (10): 5 reconstructed failures + 5 controls (INC-01, 02, 05, 03, 12).
-    # All 10 do: TP 10.
-    # Should not (3): INC-08 and INC-10 "insufficient" stay inconclusive: TN 2.
-    # The INC-10 known gap concludes when it should not: FP 1. No right cause is missed: FN 0.
+    # Should conclude (15): 5 reconstructed + 5 controls (INC-01, 02, 05, 03, 12) + 5 adversarial.
+    #   TP 10: the 5 controls and 5 adversarial. FN 5: all 5 reconstructed.
+    #   2 of those (INC-12) conclude the wrong cause, so they are also FP.
+    # Should not conclude (6): INC-08, both INC-10, tool-down, http_5xx, unknown.
+    #   FP 4: INC-08, INC-10 3-day deploy, tool-down, http_5xx. TN 2: INC-10 insufficient, unknown.
     stats = confusion(RESULTS)
-    assert sum(r["expected"]["outcome"] == "conclusive" for r in RESULTS) == 10
-    assert (stats["tp"], stats["fp"], stats["fn"], stats["tn"]) == (10, 1, 0, 2)
-    assert stats["precision"] == 10 / 11 and stats["recall"] == 1.0
+    assert sum(r["expected"]["outcome"] == "conclusive" for r in RESULTS) == 15
+    assert (stats["tp"], stats["fp"], stats["fn"], stats["tn"]) == (10, 6, 5, 2)
+    assert stats["precision"] == 10 / 16 and stats["recall"] == 10 / 15
 
 
 def test_report_shows_before_and_after():

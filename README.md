@@ -135,13 +135,6 @@ The LLM never scores itself. Code calculates these values from the Verifier's la
 | Low confidence | Anything else |
 | Conclusive | Critic accepts, at least medium confidence, and net support at least 1 above the runner-up |
 
-Two more rules apply to `bad_deploy` and `config_change` causes:
-
-- **Change evidence:** the cause needs a verified deployment row of that kind on the blamed component. Otherwise it counts no support.
-- **Failed rollback:** if the blamed component was rolled back and its error metric stayed at or above half its peak, the cause is ruled out.
-
-"Unknown", and a rewording of the top cause, do not count as rivals.
-
 Anything else is **inconclusive**, and the report says why. A fact with no valid citation becomes an assumption. Confidence is a rule-based label, not a probability.
 
 ### Reliability
@@ -239,29 +232,28 @@ Raw data: [`results.md`](evals/results/results.md) and [`results.json`](evals/re
 | Technical note, 500 words or fewer | [NOTE.md](NOTE.md) | |
 | Coding assistant transcript | [TRANSCRIPT.md](TRANSCRIPT.md) | |
 
-## Evidence rule fixes after the evaluation
+## A fix we tried and removed
 
-The evaluation showed multi-agent usually found the right cause, but our rules then blocked it. We added the two rules above, and stopped `unknown` counting as a rival. **The 72-run results above come from before these fixes.** To control evaluation cost, they were not re-run, so the effect on a real model is not yet measured.
+The evaluation showed multi-agent usually found the right cause, then our rules blocked it. We tried two rules:
 
-### Before and after, on the evidence rules alone
+1. A deploy or config cause needs a matching deployment record.
+2. A cause is ruled out if errors continued after its rollback.
 
-`reliability.rule_eval` runs 13 scenarios through the old and the new rules. Each uses an incident's real rows, with labels a perfect Verifier would give. Five rebuild failed evaluation runs from their saved summaries, and the rest are controls. The old result was produced by running the same file against the previous commit.
+On the 13 cases they were designed from, correct results rose from 6 to 12. On 8 new real-life cases, they fell from 6 to 3. The rules matched exact names, such as `payments` and `kind: deploy`, and treated missing records as proof. Real systems use other names, feature flags, regional rollbacks and several deploys at once. **We removed both rules**, because they fit our test cases but not real incidents. They remain in git history, in commit `696df01`.
 
-| Metric | Before | After |
+### Evidence rule evaluation
+
+`reliability.rule_eval` checks the evidence rules alone, with no model calls. Labels are what a perfect Verifier would give.
+
+| Set | What it is | Correct |
 |---|---|---|
-| Scenarios correct | 6/13 (46%) | 12/13 (92%) |
-| Precision | 56% | 91% |
-| Recall | 50% | 100% |
-| Wrong conclusions | 4 | 1 |
+| Reconstructed | Failed evaluation runs, rebuilt from saved summaries | 0/5 |
+| Control | Cases from the test incidents with a clear answer | 6/8 |
+| Adversarial | Real-life variations, frozen so no rule can be tuned on them | 6/8 |
 
-Full detail: [`rule_eval.md`](evals/results/rule_eval.md).
+All 21 scenarios together: precision 62%, recall 67%, 6 wrong conclusions. Full detail: [`rule_eval.md`](evals/results/rule_eval.md).
 
-**What this proves, and what it does not:**
-
-- It proves the rules now decide these cases as intended, and that all 5 controls are unchanged.
-- The 5 rebuilt failures were also used to design the fixes, so passing them is expected. The controls and the INC-08 case, which the old rules got wrong, are the stronger evidence.
-- It does not prove the full system will improve. A real Verifier can still mislabel rows.
-- One wrong conclusion remains on purpose: the rules do not check how long before an incident a change happened.
+The developer wrote the expected answers, so treat these as evidence, not proof.
 
 ### How the calculations are checked
 
@@ -272,7 +264,6 @@ Full detail: [`rule_eval.md`](evals/results/rule_eval.md).
 | Evidence precision and recall vs scikit-learn | 0 mismatches in 5,000 random cases |
 | Wilson intervals vs SciPy | 0 mismatches in 860 cases |
 | Audit: recalculate all 72 saved scores and the report | All match |
-| Deliberate breaks of the new rules and checks | Each caught, except two that cannot change any result |
 
 The audit cannot recheck evidence precision and recall in the saved runs, because they did not store cited rows. New runs store them, along with each row's Verifier label.
 

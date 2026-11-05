@@ -454,3 +454,8 @@ def test_action_for_unknown_hypothesis_is_dropped_when_conclusive():
 def test_inconclusive_keeps_general_actions_but_requires_approval():
     [result] = clean_actions([action(hypothesis_id="")], [ranked()], "inconclusive")
     assert result.requires_human_approval is True
+
+
+def test_verifier_labels_are_kept_for_diagnosis():
+    labels = {"log-1": "supports", "met-1": "symptom"}
+    assert assess_hypothesis(hypothesis(), labels, LEDGER, []).row_labels == labels

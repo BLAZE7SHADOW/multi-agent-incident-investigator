@@ -1,11 +1,14 @@
-# Scenarios for checking the evidence rules alone, with no model calls.
-# Each uses one incident's real rows, and labels the rows a perfect Verifier would mark "supports"
-# or "contradicts". "reconstructed" scenarios rebuild failed evaluation runs from their saved
-# summaries (top cause, rival and net support); the exact row labels of those runs were not saved.
+# Scenarios for checking the evidence rules alone, with no model calls. Labels are what a perfect
+# Verifier would give. Sets:
+#   reconstructed: failed evaluation runs, rebuilt from their saved summaries (exact labels unsaved)
+#   control:       cases from the test incidents with a clear right answer
+#   adversarial:   real-life variations no rule was designed around. Frozen: never tune on these.
+# Expected answers were written by the developer, so treat results as evidence, not proof.
 
 scenarios:
   - name: INC-11, unevidenced config rival ties the real cause
     incident: INC-11
+    set: reconstructed
     origin: reconstructed from multi-agent run 1
     hypotheses:
       - {id: real, category: resource_exhaustion, component: inventory, supports: [log-01, met-01]}
@@ -14,6 +17,7 @@ scenarios:
 
   - name: INC-11, "unknown" rival ties the real cause
     incident: INC-11
+    set: reconstructed
     origin: reconstructed from multi-agent run 2
     hypotheses:
       - {id: real, category: resource_exhaustion, component: inventory, supports: [log-01, met-01]}
@@ -22,6 +26,7 @@ scenarios:
 
   - name: INC-09, unevidenced config rival with 6 rows ties the real cause
     incident: INC-09
+    set: reconstructed
     origin: reconstructed from multi-agent run 0
     hypotheses:
       - {id: real, category: resource_exhaustion, component: auth, supports: [log-01, log-02, log-03, met-01, met-02, met-04]}
@@ -30,6 +35,7 @@ scenarios:
 
   - name: INC-12, rolled-back deploy beats the real cause by 1
     incident: INC-12
+    set: reconstructed
     origin: reconstructed from multi-agent run 0
     hypotheses:
       - {id: deploy, category: bad_deploy, component: payments, supports: [dep-01, log-01, log-02, met-01]}
@@ -38,6 +44,7 @@ scenarios:
 
   - name: INC-12, rolled-back deploy beats the real cause by 1, smaller
     incident: INC-12
+    set: reconstructed
     origin: reconstructed from multi-agent run 1
     hypotheses:
       - {id: deploy, category: bad_deploy, component: payments, supports: [dep-01, log-01, log-02]}
@@ -46,6 +53,7 @@ scenarios:
 
   - name: INC-01 control, real deploy cause must still conclude
     incident: INC-01
+    set: control
     origin: control
     hypotheses:
       - {id: real, category: bad_deploy, component: payments, supports: [dep-01, log-02, log-03]}
@@ -54,6 +62,7 @@ scenarios:
 
   - name: INC-02 control, real config cause must still conclude
     incident: INC-02
+    set: control
     origin: control
     hypotheses:
       - {id: real, category: config_change, component: inventory, supports: [dep-01, log-02, met-02]}
@@ -62,6 +71,7 @@ scenarios:
 
   - name: INC-05 control, regional config cause must still conclude
     incident: INC-05
+    set: control
     origin: control
     hypotheses:
       - {id: real, category: config_change, component: gateway, supports: [dep-01, log-01, met-03]}
@@ -70,6 +80,7 @@ scenarios:
 
   - name: INC-03 control, harmless deploy must not win
     incident: INC-03
+    set: control
     origin: control
     hypotheses:
       - {id: real, category: resource_exhaustion, component: redis, supports: [log-03, met-02, met-03]}
@@ -78,6 +89,7 @@ scenarios:
 
   - name: INC-12 control, a rollback that fixed errors must not block a real deploy cause
     incident: INC-12
+    set: control
     origin: control, with error_rate changed to recover after the rollback
     metric_values: {met-01: [0.003, 0.21, 0.22, 0.01, 0.01]}
     hypotheses:
@@ -87,23 +99,119 @@ scenarios:
 
   - name: INC-08 control, deploy blamed with no deployment data must not conclude
     incident: INC-08
+    set: control
     origin: control
     hypotheses:
       - {id: guess, category: bad_deploy, component: payments, supports: [log-01, met-01]}
     expected: {outcome: inconclusive}
 
-  - name: INC-10 known gap, a 3-day-old deploy is blamed for a brief blip
+  - name: INC-10, a 3-day-old deploy is blamed for a brief blip
     incident: INC-10
-    origin: known gap; the rules do not check how long before the incident a change happened
-    known_gap: true
+    set: control
+    origin: the rules do not check how long before the incident a change happened
     hypotheses:
       - {id: guess, category: bad_deploy, component: checkout, supports: [dep-01, log-01]}
     expected: {outcome: inconclusive}
 
   - name: INC-10 control, the critic's "insufficient" must hold
     incident: INC-10
+    set: control
     origin: control
     critic: insufficient
     hypotheses:
       - {id: guess, category: bad_deploy, component: checkout, supports: [dep-01, log-01]}
     expected: {outcome: inconclusive}
+
+  # --- Adversarial: written after Fixes 1 and 2, which were removed because they failed these ---
+  - name: Deploy logged under another name (payments-api)
+    set: adversarial
+    origin: services often have several names across tools
+    rows:
+      - {id: dep-1, source: deployments, ts: 2026-01-01T10:00, service: payments-api, kind: deploy}
+      - {id: log-1, source: logs, service: payments, msg: NullPointerException after release}
+    hypotheses:
+      - {id: h, category: bad_deploy, component: payments, supports: [dep-1, log-1]}
+    expected: {outcome: conclusive, category: bad_deploy, component: payments}
+
+  - name: Change was a feature flag
+    set: adversarial
+    origin: config changes are often feature flags, not deployments
+    rows:
+      - {id: dep-1, source: deployments, ts: 2026-01-01T10:00, service: payments, kind: flag}
+      - {id: log-1, source: logs, service: payments, msg: NullPointerException after release}
+    hypotheses:
+      - {id: h, category: config_change, component: payments, supports: [dep-1, log-1]}
+    expected: {outcome: conclusive, category: config_change, component: payments}
+
+  - name: Deploy blamed while the deploy tool was down
+    set: adversarial
+    origin: missing records are common during incidents
+    rows:
+      - {id: log-1, source: logs, service: payments, msg: NullPointerException after release}
+      - {id: met-1, source: metrics, service: payments, metric: error_rate, start: 2026-01-01T10:00, step_min: 10, values: [0, 0.2, 0.2, 0.2, 0.2]}
+    hypotheses:
+      - {id: h, category: bad_deploy, component: payments, supports: [log-1, met-1]}
+    expected: {outcome: inconclusive}
+
+  - name: Rollback worked, but errors took 30 minutes to drain
+    set: adversarial
+    origin: queues and caches delay recovery
+    rows:
+      - {id: dep-1, source: deployments, ts: 2026-01-01T10:00, service: payments, kind: deploy}
+      - {id: dep-9, source: deployments, ts: 2026-01-01T10:20, service: payments, kind: rollback}
+      - {id: log-1, source: logs, service: payments, msg: NullPointerException after release}
+      - {id: met-1, source: metrics, service: payments, metric: error_rate, start: 2026-01-01T10:00, step_min: 10, values: [0, 0.2, 0.2, 0.2, 0.15, 0.1, 0.0, 0.0]}
+    hypotheses:
+      - {id: h, category: bad_deploy, component: payments, supports: [dep-1, log-1]}
+    expected: {outcome: conclusive, category: bad_deploy, component: payments}
+
+  - name: Rolled back, errors continued, error metric named http_5xx
+    set: adversarial
+    origin: error metrics have many names
+    rows:
+      - {id: dep-1, source: deployments, ts: 2026-01-01T10:00, service: payments, kind: deploy}
+      - {id: dep-9, source: deployments, ts: 2026-01-01T10:20, service: payments, kind: rollback}
+      - {id: log-1, source: logs, service: payments, msg: NullPointerException after release}
+      - {id: met-1, source: metrics, service: payments, metric: http_5xx, start: 2026-01-01T10:00, step_min: 10, values: [0, 0.2, 0.2, 0.2, 0.2]}
+    hypotheses:
+      - {id: h, category: bad_deploy, component: payments, supports: [dep-1, log-1]}
+      - {id: r, category: resource_exhaustion, component: postgres, supports: [log-1]}
+    expected: {outcome: inconclusive}
+
+  - name: Two deploys, and the wrong one was rolled back
+    set: adversarial
+    origin: several changes often land close together
+    rows:
+      - {id: dep-1, source: deployments, ts: 2026-01-01T09:50, service: payments, kind: deploy}
+      - {id: dep-2, source: deployments, ts: 2026-01-01T10:00, service: payments, kind: deploy}
+      - {id: dep-9, source: deployments, ts: 2026-01-01T10:20, service: payments, kind: rollback}
+      - {id: log-1, source: logs, service: payments, msg: NullPointerException after release}
+      - {id: met-1, source: metrics, service: payments, metric: error_rate, start: 2026-01-01T10:00, step_min: 10, values: [0, 0.2, 0.2, 0.2, 0.2]}
+    hypotheses:
+      - {id: h, category: bad_deploy, component: payments, supports: [dep-1, log-1]}
+    expected: {outcome: conclusive, category: bad_deploy, component: payments}
+
+  - name: Only one region was rolled back
+    set: adversarial
+    origin: rollouts and rollbacks are often regional
+    rows:
+      - {id: dep-1, source: deployments, ts: 2026-01-01T10:00, service: payments, kind: deploy}
+      - {id: dep-9, source: deployments, ts: 2026-01-01T10:20, service: payments, kind: rollback, region: eu}
+      - {id: log-1, source: logs, service: payments, msg: NullPointerException after release}
+      - {id: met-1, source: metrics, service: payments, metric: error_rate, start: 2026-01-01T10:00, step_min: 10, values: [0, 0.2, 0.2, 0.2, 0.2]}
+    hypotheses:
+      - {id: h, category: bad_deploy, component: payments, supports: [dep-1, log-1]}
+    expected: {outcome: conclusive, category: bad_deploy, component: payments}
+
+  - name: Unknown cause has the strongest evidence
+    set: adversarial
+    origin: sometimes no proposed cause fits
+    rows:
+      - {id: log-1, source: logs, service: api, msg: slow requests}
+      - {id: met-1, source: metrics, service: api, metric: error_rate, start: 2026-01-01T10:00, step_min: 10, values: [0, 0.2, 0.2]}
+      - {id: met-2, source: metrics, service: api, metric: cpu, start: 2026-01-01T10:00, step_min: 10, values: [0.4, 0.4, 0.4]}
+    hypotheses:
+      - {id: h, category: resource_exhaustion, component: api, supports: [log-1, met-2]}
+      - {id: u, category: unknown, component: api, supports: [log-1, met-1, met-2]}
+    expected: {outcome: inconclusive}
+
