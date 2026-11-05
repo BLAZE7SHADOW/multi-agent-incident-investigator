@@ -17,15 +17,18 @@ from investigator.schemas import (
     Outcome,
     RankedHypothesis,
     RecommendedAction,
+    RowLabel,
+    RowVerdict,
     Source,
+    Verification,
 )
 from investigator.tools import read_tool_result
 
 # Fixed before any evaluation run. Do not tune these against the golden set.
-HIGH_SCORE = 0.75
-MEDIUM_SCORE = 0.5
-MIN_MARGIN = 0.15
+HIGH_FAITHFULNESS = 0.8
+MEDIUM_FAITHFULNESS = 0.5
 MIN_SOURCES = 2
+MIN_LEAD = 1
 
 _TOOL_SOURCE: dict[str, Source] = {
     "query_logs": "logs",
@@ -108,36 +111,77 @@ def clean_hypotheses(
     return cleaned, grounding
 
 
-def assess_confidence(
-    hypothesis: Hypothesis, ledger: Mapping[str, Evidence], failed_tools: Iterable[str]
-) -> Confidence:
-    """Cap the LLM's self-reported score by what the evidence can actually show."""
-    sources = {ledger[evidence_id].source for evidence_id in hypothesis.supporting}
-    contradictions = len(hypothesis.contradicting)
+def clean_verification(
+    verification: Verification,
+    hypotheses: Sequence[Hypothesis],
+    ledger: Mapping[str, Evidence],
+) -> tuple[Verification, Grounding]:
+    """Drop labels for unknown hypotheses or rows. Conflicting labels resolve to `contradicts`."""
+    known = {hypothesis.id for hypothesis in hypotheses}
+    grounding = Grounding()
+    verdicts = []
+    for verdict in verification.verdicts:
+        if verdict.hypothesis_id not in known:
+            continue
+        kept: dict[str, RowVerdict] = {}
+        for row in verdict.rows:
+            grounding += Grounding(citations=1, valid_citations=int(row.evidence_id in ledger))
+            if row.evidence_id not in ledger:
+                continue
+            seen = kept.get(row.evidence_id)
+            if seen and seen.label != row.label:
+                row = row.model_copy(update={"label": "contradicts"})
+            kept[row.evidence_id] = row
+        verdicts.append(verdict.model_copy(update={"rows": list(kept.values())}))
+    return Verification(verdicts=verdicts), grounding
+
+
+def assess_hypothesis(
+    hypothesis: Hypothesis,
+    labels: Mapping[str, RowLabel],
+    ledger: Mapping[str, Evidence],
+    failed_tools: Iterable[str],
+) -> RankedHypothesis:
+    """Compute a hypothesis's standing from Verifier labels. Unlabelled rows count for nothing."""
+    supporting = sorted(row for row, label in labels.items() if label == "supports")
+    contradicting = sorted(row for row, label in labels.items() if label == "contradicts")
+    cited = set(hypothesis.supporting)
+    faithfulness = len(cited & set(supporting)) / len(cited) if cited else 0.0
+    sources = {ledger[row].source for row in supporting}
+    net_support = len(supporting) - len(contradicting)
+
+    confidence: Confidence = "low"
     if (
-        hypothesis.category == "unknown"
-        or len(sources) < MIN_SOURCES
-        or contradictions >= len(hypothesis.supporting)
-        or hypothesis.score < MEDIUM_SCORE
+        hypothesis.category != "unknown"
+        and len(sources) >= MIN_SOURCES
+        and net_support > 0
+        and faithfulness >= MEDIUM_FAITHFULNESS
     ):
-        return "low"
-    if hypothesis.score >= HIGH_SCORE and not contradictions and not set(failed_tools):
-        return "high"
-    return "medium"
+        strong = faithfulness >= HIGH_FAITHFULNESS and not contradicting
+        confidence = "high" if strong and not set(failed_tools) else "medium"
+
+    return RankedHypothesis(
+        **hypothesis.model_dump(),
+        verified_supporting=supporting,
+        verified_contradicting=contradicting,
+        faithfulness=faithfulness,
+        net_support=net_support,
+        confidence=confidence,
+    )
 
 
 def rank_hypotheses(
     hypotheses: Sequence[Hypothesis],
+    verification: Verification | None,
     ledger: Mapping[str, Evidence],
     failed_tools: Iterable[str],
 ) -> list[RankedHypothesis]:
-    """Order by score, with unsupported hypotheses always last whatever they claim."""
+    """Order by verified evidence. With no verification, every hypothesis stays low confidence."""
     failed = list(failed_tools)
-    ordered = sorted(hypotheses, key=lambda h: (bool(h.supporting), h.score), reverse=True)
-    return [
-        RankedHypothesis(**h.model_dump(), confidence=assess_confidence(h, ledger, failed))
-        for h in ordered
-    ]
+    verdicts = verification.verdicts if verification else []
+    labels = {v.hypothesis_id: {row.evidence_id: row.label for row in v.rows} for v in verdicts}
+    assessed = [assess_hypothesis(h, labels.get(h.id, {}), ledger, failed) for h in hypotheses]
+    return sorted(assessed, key=lambda h: (h.net_support, h.faithfulness), reverse=True)
 
 
 def decide_outcome(
@@ -152,10 +196,8 @@ def decide_outcome(
         reasons.append("the critic did not accept the conclusion")
     if top.confidence == "low":
         reasons.append("the top hypothesis has low confidence")
-    rivals = [h for h in ranked[1:] if h.supporting]
-    # Rounded so equal gaps get equal verdicts despite floating-point error.
-    if rivals and round(top.score - rivals[0].score, 6) < MIN_MARGIN:
-        reasons.append(f"no clear margin over the alternative '{rivals[0].id}'")
+    if len(ranked) > 1 and top.net_support - ranked[1].net_support < MIN_LEAD:
+        reasons.append(f"no clear lead over the alternative '{ranked[1].id}'")
     return ("inconclusive" if reasons else "conclusive"), reasons
 
 

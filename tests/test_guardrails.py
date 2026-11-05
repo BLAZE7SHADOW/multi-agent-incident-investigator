@@ -2,11 +2,12 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from investigator.guardrails import (
-    assess_confidence,
+    assess_hypothesis,
     clean_actions,
     clean_claim,
     clean_finding,
     clean_hypotheses,
+    clean_verification,
     collect_evidence,
     decide_outcome,
     rank_hypotheses,
@@ -19,8 +20,11 @@ from investigator.schemas import (
     Finding,
     Grounding,
     Hypothesis,
+    HypothesisVerdict,
     RankedHypothesis,
+    RowVerdict,
     ToolResult,
+    Verification,
 )
 from investigator.tools import wrap_untrusted
 
@@ -33,11 +37,10 @@ LEDGER = {
 ACCEPT = Critique(verdict="accept", objections=[], requests=[])
 
 
-def hypothesis(id="h1", score=0.8, supporting=("log-1", "met-1"), contradicting=(), **fields):
+def hypothesis(id="h1", supporting=("log-1", "met-1"), contradicting=(), **fields):
     defaults = {"statement": "s", "category": "bad_deploy", "component": "payments"}
     return Hypothesis(
         id=id,
-        score=score,
         supporting=list(supporting),
         contradicting=list(contradicting),
         assumptions=[],
@@ -45,9 +48,17 @@ def hypothesis(id="h1", score=0.8, supporting=("log-1", "met-1"), contradicting=
     )
 
 
-def ranked(id="h1", score=0.8, confidence="medium", supporting=("log-1", "met-1"), **fields):
-    base = hypothesis(id=id, score=score, supporting=supporting, **fields)
-    return RankedHypothesis(**base.model_dump(), confidence=confidence)
+def ranked(id="h1", confidence="medium", net_support=3, **fields):
+    return RankedHypothesis(
+        **hypothesis(id=id, **fields).model_dump(), confidence=confidence, net_support=net_support
+    )
+
+
+def verdict(hypothesis_id="h1", **labels):
+    rows = [
+        RowVerdict(evidence_id=k.replace("_", "-"), label=v, reason="r") for k, v in labels.items()
+    ]
+    return HypothesisVerdict(hypothesis_id=hypothesis_id, rows=rows)
 
 
 def tool_message(result: ToolResult) -> ToolMessage:
@@ -152,62 +163,204 @@ def test_grounding_validity_with_no_citations_is_not_a_division_error():
     assert Grounding().validity == 1.0
 
 
-# --- Confidence ---
+# --- Verification ---
+
+
+def test_clean_verification_drops_unknown_rows_and_hypotheses_and_measures_them():
+    raw = Verification(
+        verdicts=[
+            verdict(log_1="supports", fake_1="supports"),
+            verdict("nope", log_1="supports"),
+        ]
+    )
+    cleaned, grounding = clean_verification(raw, [hypothesis()], LEDGER)
+    assert [v.hypothesis_id for v in cleaned.verdicts] == ["h1"]
+    assert [r.evidence_id for r in cleaned.verdicts[0].rows] == ["log-1"]
+    assert grounding == Grounding(citations=2, valid_citations=1)
+
+
+def test_conflicting_labels_for_a_row_resolve_to_contradicts():
+    rows = [
+        RowVerdict(evidence_id="log-1", label="supports", reason="r"),
+        RowVerdict(evidence_id="log-1", label="irrelevant", reason="r"),
+    ]
+    raw = Verification(verdicts=[HypothesisVerdict(hypothesis_id="h1", rows=rows)])
+    cleaned, _ = clean_verification(raw, [hypothesis()], LEDGER)
+    assert [(r.evidence_id, r.label) for r in cleaned.verdicts[0].rows] == [
+        ("log-1", "contradicts")
+    ]
+
+
+# --- Computed confidence ---
+
+BOTH = {"log-1": "supports", "met-1": "supports"}
 
 
 @pytest.mark.parametrize(
-    ("label", "h", "failed", "expected"),
+    ("label", "h", "labels", "failed", "expected"),
     [
-        ("two sources, strong", hypothesis(score=0.9), [], "high"),
-        ("just at high threshold", hypothesis(score=0.75), [], "high"),
-        ("below high threshold", hypothesis(score=0.74), [], "medium"),
-        ("just at medium threshold", hypothesis(score=0.5), [], "medium"),
-        ("below medium threshold", hypothesis(score=0.49), [], "low"),
-        ("a tool failed", hypothesis(score=0.9), ["get_deployments"], "medium"),
-        ("minor contradiction", hypothesis(score=0.9, contradicting=["dep-1"]), [], "medium"),
+        ("all verified", hypothesis(), BOTH, [], "high"),
         (
-            "contradictions match support",
-            hypothesis(score=0.9, contradicting=["dep-1", "log-2"]),
+            "exactly 4 of 5 cited verified",
+            hypothesis(supporting=["log-1", "log-2", "met-1", "dep-1", "met-2"]),
+            {"log-1": "supports", "log-2": "supports", "met-1": "supports", "dep-1": "supports"},
+            [],
+            "high",
+        ),
+        (
+            "3 of 4 cited verified",
+            hypothesis(supporting=["log-1", "log-2", "met-1", "dep-1"]),
+            {"log-1": "supports", "log-2": "supports", "met-1": "supports"},
+            [],
+            "medium",
+        ),
+        (
+            "exactly half of cited verified",
+            hypothesis(supporting=["log-1", "met-1", "log-2", "dep-1"]),
+            BOTH,
+            [],
+            "medium",
+        ),
+        (
+            "under half of cited verified",
+            hypothesis(supporting=["log-1", "met-1", "log-2", "dep-1", "met-2"]),
+            BOTH,
             [],
             "low",
         ),
-        ("one source only", hypothesis(score=0.99, supporting=["log-1", "log-2"]), [], "low"),
-        ("no evidence", hypothesis(score=0.99, supporting=[]), [], "low"),
-        ("unknown cause", hypothesis(score=0.99, category="unknown"), [], "low"),
+        ("a tool failed", hypothesis(), BOTH, ["get_deployments"], "medium"),
+        (
+            "one verified contradiction",
+            hypothesis(),
+            {
+                "log-1": "supports",
+                "met-1": "supports",
+                "dep-1": "contradicts",
+            },
+            [],
+            "medium",
+        ),
+        (
+            "contradictions match support",
+            hypothesis(),
+            {
+                "log-1": "supports",
+                "met-1": "supports",
+                "dep-1": "contradicts",
+                "log-2": "contradicts",
+            },
+            [],
+            "low",
+        ),
+        (
+            "one verified source type",
+            hypothesis(supporting=["log-1", "log-2"]),
+            {"log-1": "supports", "log-2": "supports"},
+            [],
+            "low",
+        ),
+        ("cited but not verified", hypothesis(), {"log-1": "irrelevant"}, [], "low"),
+        ("verifier said nothing", hypothesis(), {}, [], "low"),
+        ("cites nothing", hypothesis(supporting=[]), BOTH, [], "low"),
+        ("unknown cause", hypothesis(category="unknown"), BOTH, [], "low"),
     ],
     ids=lambda v: v if isinstance(v, str) and " " in v else "",
 )
-def test_assess_confidence(label, h, failed, expected):
-    assert assess_confidence(h, LEDGER, failed) == expected
+def test_confidence_is_computed_from_verification(label, h, labels, failed, expected):
+    ledger = {**LEDGER, "met-2": Evidence(id="met-2", source="metrics", content="x")}
+    assert assess_hypothesis(h, labels, ledger, failed).confidence == expected
 
 
-def test_ranking_puts_unsupported_last_even_with_top_score():
-    bluff = hypothesis(id="bluff", score=0.99, supporting=[])
-    weak = hypothesis(id="weak", score=0.4)
-    strong = hypothesis(id="strong", score=0.8)
-    assert [h.id for h in rank_hypotheses([bluff, weak, strong], LEDGER, [])] == [
-        "strong",
-        "weak",
-        "bluff",
-    ]
+def test_computed_metrics_are_exact():
+    h = hypothesis(supporting=["log-1", "log-2", "met-1", "dep-1"])
+    labels = {
+        "log-1": "supports",
+        "met-1": "supports",
+        "log-2": "irrelevant",
+        "dep-1": "contradicts",
+    }
+    result = assess_hypothesis(h, labels, LEDGER, [])
+    assert result.faithfulness == 0.5
+    assert result.net_support == 1
+    assert result.verified_supporting == ["log-1", "met-1"]
+    assert result.verified_contradicting == ["dep-1"]
+
+
+def test_uncited_verified_rows_do_not_raise_faithfulness():
+    h = hypothesis(supporting=["log-1", "log-2"])
+    labels = {"log-1": "supports", "met-1": "supports", "dep-1": "supports"}
+    assert assess_hypothesis(h, labels, LEDGER, []).faithfulness == 0.5
+
+
+def test_source_types_count_only_verified_rows():
+    h = hypothesis(supporting=["log-1", "met-1"])
+    labels = {"log-1": "supports", "log-2": "supports", "met-1": "irrelevant"}
+    assert assess_hypothesis(h, labels, LEDGER, []).confidence == "low"
+
+
+def test_repeating_a_citation_does_not_inflate_faithfulness():
+    h = hypothesis(supporting=["log-1", "log-1", "log-1", "met-1"])
+    assert assess_hypothesis(h, {"log-1": "supports"}, LEDGER, []).faithfulness == 0.5
+
+
+def test_verifier_can_surface_a_contradiction_the_hypothesis_never_cited():
+    labels = {**BOTH, "dep-1": "contradicts"}
+    result = assess_hypothesis(hypothesis(contradicting=[]), labels, LEDGER, [])
+    assert result.verified_contradicting == ["dep-1"]
+    assert result.confidence == "medium"
+
+
+def test_ranking_follows_verified_evidence_not_citation_count():
+    bluff = hypothesis(id="bluff", supporting=["log-1", "log-2", "met-1", "dep-1"])
+    real = hypothesis(id="real", supporting=["log-1", "met-1"])
+    verification = Verification(
+        verdicts=[
+            verdict("real", **{"log_1": "supports", "met_1": "supports", "dep_1": "supports"})
+        ]
+    )
+    result = rank_hypotheses([bluff, real], verification, LEDGER, [])
+    assert [h.id for h in result] == ["real", "bluff"]
+
+
+def test_more_verified_evidence_outranks_higher_faithfulness():
+    broad = hypothesis(id="broad", supporting=["log-1", "log-2", "met-1", "dep-1"])
+    narrow = hypothesis(id="narrow", supporting=["log-1"])
+    verification = Verification(
+        verdicts=[
+            verdict("broad", log_1="supports", log_2="supports", met_1="supports"),
+            verdict("narrow", log_1="supports"),
+        ]
+    )
+    result = rank_hypotheses([narrow, broad], verification, LEDGER, [])
+    assert [h.id for h in result] == ["broad", "narrow"]
+
+
+def test_ranking_uses_faithfulness_to_break_ties():
+    loose = hypothesis(id="loose", supporting=["log-1", "log-2"])
+    tight = hypothesis(id="tight", supporting=["log-1"])
+    verification = Verification(
+        verdicts=[verdict("loose", log_1="supports"), verdict("tight", log_1="supports")]
+    )
+    result = rank_hypotheses([loose, tight], verification, LEDGER, [])
+    assert [h.id for h in result] == ["tight", "loose"]
+
+
+def test_without_verification_everything_is_low_and_inconclusive():
+    result = rank_hypotheses([hypothesis()], None, LEDGER, [])
+    assert result[0].confidence == "low"
+    assert decide_outcome(result, ACCEPT)[0] == "inconclusive"
 
 
 # --- Outcome ---
 
 
 def test_conclusive_when_all_conditions_hold():
-    assert decide_outcome([ranked(), ranked(id="h2", score=0.5)], ACCEPT) == ("conclusive", [])
+    rival = ranked(id="h2", net_support=2)
+    assert decide_outcome([ranked(net_support=3), rival], ACCEPT) == ("conclusive", [])
 
 
-@pytest.mark.parametrize(("top", "rival"), [(0.75, 0.6), (0.7, 0.55), (0.8, 0.65)])
-def test_margin_at_exact_threshold_is_conclusive(top, rival):
-    outcome, _ = decide_outcome([ranked(score=top), ranked(id="h2", score=rival)], ACCEPT)
-    assert outcome == "conclusive"
-
-
-def test_margin_just_below_threshold_is_inconclusive():
-    outcome, _ = decide_outcome([ranked(score=0.75), ranked(id="h2", score=0.61)], ACCEPT)
-    assert outcome == "inconclusive"
+def test_no_rival_needs_no_lead():
+    assert decide_outcome([ranked()], ACCEPT)[0] == "conclusive"
 
 
 @pytest.mark.parametrize(
@@ -218,18 +371,13 @@ def test_margin_just_below_threshold_is_inconclusive():
         ([ranked()], Critique(verdict="investigate", objections=[], requests=[]), "critic"),
         ([ranked()], Critique(verdict="insufficient", objections=[], requests=[]), "critic"),
         ([ranked(confidence="low")], ACCEPT, "low confidence"),
-        ([ranked(score=0.8), ranked(id="h2", score=0.7)], ACCEPT, "margin"),
+        ([ranked(net_support=2), ranked(id="h2", net_support=2)], ACCEPT, "lead"),
     ],
 )
 def test_inconclusive_cases_say_why(hypotheses, critique, reason):
     outcome, reasons = decide_outcome(hypotheses, critique)
     assert outcome == "inconclusive"
     assert reason in " ".join(reasons)
-
-
-def test_unsupported_rival_does_not_block_a_conclusion():
-    rival = ranked(id="h2", score=0.79, supporting=(), confidence="low")
-    assert decide_outcome([ranked(score=0.8), rival], ACCEPT)[0] == "conclusive"
 
 
 def test_all_failed_conditions_are_reported():
