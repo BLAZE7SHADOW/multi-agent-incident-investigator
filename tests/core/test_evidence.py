@@ -40,7 +40,7 @@ ACCEPT = Critique(verdict="accept", objections=[], requests=[])
 
 
 def hypothesis(id="h1", supporting=("log-1", "met-1"), contradicting=(), **fields):
-    defaults = {"statement": "s", "category": "bad_deploy", "component": "payments"}
+    defaults = {"statement": "s", "category": "resource_exhaustion", "component": "payments"}
     return Hypothesis(
         id=id,
         supporting=list(supporting),
@@ -396,7 +396,7 @@ def test_without_verification_everything_is_low_and_inconclusive():
 
 
 def test_conclusive_when_all_conditions_hold():
-    rival = ranked(id="h2", net_support=2)
+    rival = ranked(id="h2", net_support=2, category="traffic_surge")
     assert decide_outcome([ranked(net_support=3), rival], ACCEPT) == ("conclusive", [])
 
 
@@ -412,7 +412,11 @@ def test_no_rival_needs_no_lead():
         ([ranked()], Critique(verdict="investigate", objections=[], requests=[]), "critic"),
         ([ranked()], Critique(verdict="insufficient", objections=[], requests=[]), "critic"),
         ([ranked(confidence="low")], ACCEPT, "low confidence"),
-        ([ranked(net_support=2), ranked(id="h2", net_support=2)], ACCEPT, "lead"),
+        (
+            [ranked(net_support=2), ranked(id="h2", net_support=2, category="traffic_surge")],
+            ACCEPT,
+            "lead",
+        ),
     ],
 )
 def test_inconclusive_cases_say_why(hypotheses, critique, reason):

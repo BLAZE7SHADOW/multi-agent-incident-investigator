@@ -1,0 +1,109 @@
+# Scenarios for checking the evidence rules alone, with no model calls.
+# Each uses one incident's real rows, and labels the rows a perfect Verifier would mark "supports"
+# or "contradicts". "reconstructed" scenarios rebuild failed evaluation runs from their saved
+# summaries (top cause, rival and net support); the exact row labels of those runs were not saved.
+
+scenarios:
+  - name: INC-11, unevidenced config rival ties the real cause
+    incident: INC-11
+    origin: reconstructed from multi-agent run 1
+    hypotheses:
+      - {id: real, category: resource_exhaustion, component: inventory, supports: [log-01, met-01]}
+      - {id: rival, category: config_change, component: inventory, supports: [log-01, met-01]}
+    expected: {outcome: conclusive, category: resource_exhaustion, component: inventory}
+
+  - name: INC-11, "unknown" rival ties the real cause
+    incident: INC-11
+    origin: reconstructed from multi-agent run 2
+    hypotheses:
+      - {id: real, category: resource_exhaustion, component: inventory, supports: [log-01, met-01]}
+      - {id: rival, category: unknown, component: inventory, supports: [log-01, met-01]}
+    expected: {outcome: conclusive, category: resource_exhaustion, component: inventory}
+
+  - name: INC-09, unevidenced config rival with 6 rows ties the real cause
+    incident: INC-09
+    origin: reconstructed from multi-agent run 0
+    hypotheses:
+      - {id: real, category: resource_exhaustion, component: auth, supports: [log-01, log-02, log-03, met-01, met-02, met-04]}
+      - {id: rival, category: config_change, component: checkout, supports: [log-02, log-03, log-04, met-03, met-04, met-05]}
+    expected: {outcome: conclusive, category: resource_exhaustion, component: auth}
+
+  - name: INC-12, rolled-back deploy beats the real cause by 1
+    incident: INC-12
+    origin: reconstructed from multi-agent run 0
+    hypotheses:
+      - {id: deploy, category: bad_deploy, component: payments, supports: [dep-01, log-01, log-02, met-01]}
+      - {id: real, category: resource_exhaustion, component: postgres, supports: [log-01, log-03, met-03]}
+    expected: {outcome: conclusive, category: resource_exhaustion, component: postgres}
+
+  - name: INC-12, rolled-back deploy beats the real cause by 1, smaller
+    incident: INC-12
+    origin: reconstructed from multi-agent run 1
+    hypotheses:
+      - {id: deploy, category: bad_deploy, component: payments, supports: [dep-01, log-01, log-02]}
+      - {id: real, category: resource_exhaustion, component: postgres, supports: [log-03, met-03]}
+    expected: {outcome: conclusive, category: resource_exhaustion, component: postgres}
+
+  - name: INC-01 control, real deploy cause must still conclude
+    incident: INC-01
+    origin: control
+    hypotheses:
+      - {id: real, category: bad_deploy, component: payments, supports: [dep-01, log-02, log-03]}
+      - {id: rival, category: dependency_failure, component: payvendor, supports: []}
+    expected: {outcome: conclusive, category: bad_deploy, component: payments}
+
+  - name: INC-02 control, real config cause must still conclude
+    incident: INC-02
+    origin: control
+    hypotheses:
+      - {id: real, category: config_change, component: inventory, supports: [dep-01, log-02, met-02]}
+      - {id: rival, category: dependency_failure, component: postgres, supports: [log-01], contradicts: [met-03]}
+    expected: {outcome: conclusive, category: config_change, component: inventory}
+
+  - name: INC-05 control, regional config cause must still conclude
+    incident: INC-05
+    origin: control
+    hypotheses:
+      - {id: real, category: config_change, component: gateway, supports: [dep-01, log-01, met-03]}
+      - {id: rival, category: dependency_failure, component: checkout, supports: []}
+    expected: {outcome: conclusive, category: config_change, component: gateway}
+
+  - name: INC-03 control, harmless deploy must not win
+    incident: INC-03
+    origin: control
+    hypotheses:
+      - {id: real, category: resource_exhaustion, component: redis, supports: [log-03, met-02, met-03]}
+      - {id: trap, category: bad_deploy, component: checkout, supports: [dep-01, log-02], contradicts: [log-01]}
+    expected: {outcome: conclusive, category: resource_exhaustion, component: redis}
+
+  - name: INC-12 control, a rollback that fixed errors must not block a real deploy cause
+    incident: INC-12
+    origin: control, with error_rate changed to recover after the rollback
+    metric_values: {met-01: [0.003, 0.21, 0.22, 0.01, 0.01]}
+    hypotheses:
+      - {id: real, category: bad_deploy, component: payments, supports: [dep-01, log-01, met-01]}
+      - {id: rival, category: resource_exhaustion, component: postgres, supports: [log-03]}
+    expected: {outcome: conclusive, category: bad_deploy, component: payments}
+
+  - name: INC-08 control, deploy blamed with no deployment data must not conclude
+    incident: INC-08
+    origin: control
+    hypotheses:
+      - {id: guess, category: bad_deploy, component: payments, supports: [log-01, met-01]}
+    expected: {outcome: inconclusive}
+
+  - name: INC-10 known gap, a 3-day-old deploy is blamed for a brief blip
+    incident: INC-10
+    origin: known gap; the rules do not check how long before the incident a change happened
+    known_gap: true
+    hypotheses:
+      - {id: guess, category: bad_deploy, component: checkout, supports: [dep-01, log-01]}
+    expected: {outcome: inconclusive}
+
+  - name: INC-10 control, the critic's "insufficient" must hold
+    incident: INC-10
+    origin: control
+    critic: insufficient
+    hypotheses:
+      - {id: guess, category: bad_deploy, component: checkout, supports: [dep-01, log-01]}
+    expected: {outcome: inconclusive}

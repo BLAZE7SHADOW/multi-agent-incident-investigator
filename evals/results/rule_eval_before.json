@@ -1,0 +1,235 @@
+[
+ {
+  "name": "INC-11, unevidenced config rival ties the real cause",
+  "origin": "reconstructed from multi-agent run 1",
+  "known_gap": false,
+  "expected": {
+   "outcome": "conclusive",
+   "category": "resource_exhaustion",
+   "component": "inventory"
+  },
+  "outcome": "inconclusive",
+  "top": "resource_exhaustion/inventory",
+  "net": [
+   2,
+   2
+  ],
+  "reasons": [
+   "no clear lead over the alternative 'rival'"
+  ],
+  "correct": false
+ },
+ {
+  "name": "INC-11, \"unknown\" rival ties the real cause",
+  "origin": "reconstructed from multi-agent run 2",
+  "known_gap": false,
+  "expected": {
+   "outcome": "conclusive",
+   "category": "resource_exhaustion",
+   "component": "inventory"
+  },
+  "outcome": "inconclusive",
+  "top": "resource_exhaustion/inventory",
+  "net": [
+   2,
+   2
+  ],
+  "reasons": [
+   "no clear lead over the alternative 'rival'"
+  ],
+  "correct": false
+ },
+ {
+  "name": "INC-09, unevidenced config rival with 6 rows ties the real cause",
+  "origin": "reconstructed from multi-agent run 0",
+  "known_gap": false,
+  "expected": {
+   "outcome": "conclusive",
+   "category": "resource_exhaustion",
+   "component": "auth"
+  },
+  "outcome": "inconclusive",
+  "top": "resource_exhaustion/auth",
+  "net": [
+   6,
+   6
+  ],
+  "reasons": [
+   "no clear lead over the alternative 'rival'"
+  ],
+  "correct": false
+ },
+ {
+  "name": "INC-12, rolled-back deploy beats the real cause by 1",
+  "origin": "reconstructed from multi-agent run 0",
+  "known_gap": false,
+  "expected": {
+   "outcome": "conclusive",
+   "category": "resource_exhaustion",
+   "component": "postgres"
+  },
+  "outcome": "conclusive",
+  "top": "bad_deploy/payments",
+  "net": [
+   4,
+   3
+  ],
+  "reasons": [],
+  "correct": false
+ },
+ {
+  "name": "INC-12, rolled-back deploy beats the real cause by 1, smaller",
+  "origin": "reconstructed from multi-agent run 1",
+  "known_gap": false,
+  "expected": {
+   "outcome": "conclusive",
+   "category": "resource_exhaustion",
+   "component": "postgres"
+  },
+  "outcome": "conclusive",
+  "top": "bad_deploy/payments",
+  "net": [
+   3,
+   2
+  ],
+  "reasons": [],
+  "correct": false
+ },
+ {
+  "name": "INC-01 control, real deploy cause must still conclude",
+  "origin": "control",
+  "known_gap": false,
+  "expected": {
+   "outcome": "conclusive",
+   "category": "bad_deploy",
+   "component": "payments"
+  },
+  "outcome": "conclusive",
+  "top": "bad_deploy/payments",
+  "net": [
+   3,
+   0
+  ],
+  "reasons": [],
+  "correct": true
+ },
+ {
+  "name": "INC-02 control, real config cause must still conclude",
+  "origin": "control",
+  "known_gap": false,
+  "expected": {
+   "outcome": "conclusive",
+   "category": "config_change",
+   "component": "inventory"
+  },
+  "outcome": "conclusive",
+  "top": "config_change/inventory",
+  "net": [
+   3,
+   0
+  ],
+  "reasons": [],
+  "correct": true
+ },
+ {
+  "name": "INC-05 control, regional config cause must still conclude",
+  "origin": "control",
+  "known_gap": false,
+  "expected": {
+   "outcome": "conclusive",
+   "category": "config_change",
+   "component": "gateway"
+  },
+  "outcome": "conclusive",
+  "top": "config_change/gateway",
+  "net": [
+   3,
+   0
+  ],
+  "reasons": [],
+  "correct": true
+ },
+ {
+  "name": "INC-03 control, harmless deploy must not win",
+  "origin": "control",
+  "known_gap": false,
+  "expected": {
+   "outcome": "conclusive",
+   "category": "resource_exhaustion",
+   "component": "redis"
+  },
+  "outcome": "conclusive",
+  "top": "resource_exhaustion/redis",
+  "net": [
+   3,
+   1
+  ],
+  "reasons": [],
+  "correct": true
+ },
+ {
+  "name": "INC-12 control, a rollback that fixed errors must not block a real deploy cause",
+  "origin": "control, with error_rate changed to recover after the rollback",
+  "known_gap": false,
+  "expected": {
+   "outcome": "conclusive",
+   "category": "bad_deploy",
+   "component": "payments"
+  },
+  "outcome": "conclusive",
+  "top": "bad_deploy/payments",
+  "net": [
+   3,
+   1
+  ],
+  "reasons": [],
+  "correct": true
+ },
+ {
+  "name": "INC-08 control, deploy blamed with no deployment data must not conclude",
+  "origin": "control",
+  "known_gap": false,
+  "expected": {
+   "outcome": "inconclusive"
+  },
+  "outcome": "conclusive",
+  "top": "bad_deploy/payments",
+  "net": [
+   2
+  ],
+  "reasons": [],
+  "correct": false
+ },
+ {
+  "name": "INC-10 known gap, a 3-day-old deploy is blamed for a brief blip",
+  "origin": "known gap; the rules do not check how long before the incident a change happened",
+  "known_gap": true,
+  "expected": {
+   "outcome": "inconclusive"
+  },
+  "outcome": "conclusive",
+  "top": "bad_deploy/checkout",
+  "net": [
+   2
+  ],
+  "reasons": [],
+  "correct": false
+ },
+ {
+  "name": "INC-10 control, the critic's \"insufficient\" must hold",
+  "origin": "control",
+  "known_gap": false,
+  "expected": {
+   "outcome": "inconclusive"
+  },
+  "outcome": "inconclusive",
+  "top": "bad_deploy/checkout",
+  "net": [
+   2
+  ],
+  "reasons": [
+   "the critic did not accept the conclusion"
+  ],
+  "correct": true
+ }
+]

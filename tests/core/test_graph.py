@@ -107,7 +107,7 @@ class StubAgents:
         hypothesis = Hypothesis(
             id="h1",
             statement="the deploy broke it",
-            category="bad_deploy",
+            category="resource_exhaustion",
             component="api",
             supporting=sorted(ledger),
             contradicting=[],

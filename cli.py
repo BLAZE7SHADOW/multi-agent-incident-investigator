@@ -27,6 +27,7 @@ def render(report: Report) -> str:
             f"  {rank}. [{h.confidence}] {h.statement} ({h.category}, {h.component})",
             f"     supports: {h.verified_supporting}  contradicts: {h.verified_contradicting}",
             f"     verified ratio: {h.verified_ratio:.2f}  net support: {h.net_support}",
+            *([f"     disqualified: {h.disqualified}"] if h.disqualified else []),
         ]
     lines.append(f"\nFacts: {len(report.facts)}  Inferences: {len(report.inferences)}")
     lines.append(f"Assumptions: {len(report.assumptions)}")

@@ -50,6 +50,8 @@ A free Gemini key may not be enough. One run made 3 to 23 model requests in our 
 | Run a small comparison | `uv run python -m evals --repeats 1 --cases INC-01 INC-08` | Yes |
 | Calibration and cost report | `uv run python -m reliability.analysis` | No |
 | Check for regressions | `uv run python -m reliability.regression` | No |
+| Score the evidence rules alone | `uv run python -m reliability.rule_eval` | No |
+| Recalculate every saved score | `uv run python -m reliability.audit` | No |
 
 The full comparison makes 72 runs, used about 1.5M tokens, and stops starting new runs at 2M tokens. It writes to `evals/results/`.
 
@@ -132,6 +134,13 @@ The LLM never scores itself. Code calculates these values from the Verifier's la
 | Medium confidence | Ratio ≥ 0.5, 2+ source types, positive net support |
 | Low confidence | Anything else |
 | Conclusive | Critic accepts, at least medium confidence, and net support at least 1 above the runner-up |
+
+Two more rules apply to `bad_deploy` and `config_change` causes:
+
+- **Change evidence:** the cause needs a verified deployment row of that kind on the blamed component. Otherwise it counts no support.
+- **Failed rollback:** if the blamed component was rolled back and its error metric stayed at or above half its peak, the cause is ruled out.
+
+"Unknown", and a rewording of the top cause, do not count as rivals.
 
 Anything else is **inconclusive**, and the report says why. A fact with no valid citation becomes an assumption. Confidence is a rule-based label, not a probability.
 
@@ -229,6 +238,43 @@ Raw data: [`results.md`](evals/results/results.md) and [`results.json`](evals/re
 | No hardcoded answers | Tools never receive answers | `tests/core/test_tools.py` |
 | Technical note, 500 words or fewer | [NOTE.md](NOTE.md) | |
 | Coding assistant transcript | [TRANSCRIPT.md](TRANSCRIPT.md) | |
+
+## Evidence rule fixes after the evaluation
+
+The evaluation showed multi-agent usually found the right cause, but our rules then blocked it. We added the two rules above, and stopped `unknown` counting as a rival. **The 72-run results above come from before these fixes.** To control evaluation cost, they were not re-run, so the effect on a real model is not yet measured.
+
+### Before and after, on the evidence rules alone
+
+`reliability.rule_eval` runs 13 scenarios through the old and the new rules. Each uses an incident's real rows, with labels a perfect Verifier would give. Five rebuild failed evaluation runs from their saved summaries, and the rest are controls. The old result was produced by running the same file against the previous commit.
+
+| Metric | Before | After |
+|---|---|---|
+| Scenarios correct | 6/13 (46%) | 12/13 (92%) |
+| Precision | 56% | 91% |
+| Recall | 50% | 100% |
+| Wrong conclusions | 4 | 1 |
+
+Full detail: [`rule_eval.md`](evals/results/rule_eval.md).
+
+**What this proves, and what it does not:**
+
+- It proves the rules now decide these cases as intended, and that all 5 controls are unchanged.
+- The 5 rebuilt failures were also used to design the fixes, so passing them is expected. The controls and the INC-08 case, which the old rules got wrong, are the stronger evidence.
+- It does not prove the full system will improve. A real Verifier can still mislabel rows.
+- One wrong conclusion remains on purpose: the rules do not check how long before an incident a change happened.
+
+### How the calculations are checked
+
+| Check | Result |
+|---|---|
+| Hand-worked examples, with the working in comments | All pass |
+| Property tests: thousands of generated inputs per rule | No counterexample found |
+| Evidence precision and recall vs scikit-learn | 0 mismatches in 5,000 random cases |
+| Wilson intervals vs SciPy | 0 mismatches in 860 cases |
+| Audit: recalculate all 72 saved scores and the report | All match |
+| Deliberate breaks of the new rules and checks | Each caught, except two that cannot change any result |
+
+The audit cannot recheck evidence precision and recall in the saved runs, because they did not store cited rows. New runs store them, along with each row's Verifier label.
 
 ## Reliability extras
 

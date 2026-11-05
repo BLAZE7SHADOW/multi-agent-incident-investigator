@@ -215,6 +215,8 @@ class RankedHypothesis(Hypothesis):
     verified_ratio: float = 0.0
     net_support: int = 0
     confidence: Confidence = "low"
+    disqualified: str = ""
+    row_labels: dict[str, RowLabel] = {}
 
 
 class RecommendedAction(Action):

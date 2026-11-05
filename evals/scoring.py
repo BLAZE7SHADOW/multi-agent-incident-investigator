@@ -28,6 +28,11 @@ class RunScore(BaseModel):
     stop_reason: str = ""
     outcome_reasons: list[str] = []
     runner_up: str = ""
+    cited: list[str] = []
+    verified_supporting: list[str] = []
+    verified_contradicting: list[str] = []
+    row_labels: dict[str, str] = {}
+    disqualified: str = ""
     wrong_conclusion: bool = False
     missed_conclusion: bool = False
     fell_for_trap: bool = False
@@ -86,6 +91,11 @@ def score_run(case: Case, report: Report, system: str, repeat: int, latency_s: f
         stop_reason=report.stop_reason,
         outcome_reasons=report.outcome_reasons,
         runner_up=_describe(report.hypotheses[1]) if len(report.hypotheses) > 1 else "",
+        cited=top.supporting if top else [],
+        verified_supporting=top.verified_supporting if top else [],
+        verified_contradicting=top.verified_contradicting if top else [],
+        row_labels=top.row_labels if top else {},
+        disqualified=top.disqualified if top else "",
         wrong_conclusion=concluded and not correct,
         missed_conclusion=truth.outcome == "conclusive" and not concluded,
         fell_for_trap=bool(
