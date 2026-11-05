@@ -69,8 +69,8 @@ def _on_failure(exc: Exception) -> str:
 
 
 def tool_middleware(retry_delay: float = 0.2) -> list:
-    """Retries and redaction. Every agent uses this, so no raw row reaches a provider."""
-    redact = {"apply_to_input": False, "apply_to_tool_results": True, "strategy": "redact"}
+    """Retries and redaction of incident text and tool output before either reaches a provider."""
+    redact = {"apply_to_input": True, "apply_to_tool_results": True, "strategy": "redact"}
     return [
         ToolRetryMiddleware(
             max_retries=2, retry_on=(ToolFault,), on_failure=_on_failure, initial_delay=retry_delay
