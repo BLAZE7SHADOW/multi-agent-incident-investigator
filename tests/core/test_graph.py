@@ -63,7 +63,7 @@ class StubAgents:
             name: 0 for name in ("plan", "investigate", "reason", "verify", "criticize", "report")
         }
         self.events = []
-        self.upstream = {}
+        self.context = {}
         self.running = 0
         self.peak_running = 0
 
@@ -77,13 +77,13 @@ class StubAgents:
         self._enter("plan")
         return Plan(tasks=self.plan_specs)
 
-    async def investigate(self, task, incident, upstream):
+    async def investigate(self, task, incident, context):
         self.events.append(("start", task.id))
         self.running += 1
         self.peak_running = max(self.peak_running, self.running)
         await asyncio.sleep(self.delay)
         self.running -= 1
-        self.upstream[task.id] = [f.summary for f in upstream]
+        self.context[task.id] = [f.summary for f in context]
         self._enter("investigate")
         failing = self.fail.get(task.id)
         if failing is not None:
@@ -158,13 +158,13 @@ async def test_independent_tasks_run_in_parallel():
     assert agents.peak_running == 2
 
 
-async def test_dependent_task_waits_and_receives_upstream_finding():
+async def test_dependent_task_waits_and_receives_its_dependency_first():
     second = TaskSpec(id="dep", agent="dependency", question="q", depends_on=["obs"])
     agents = StubAgents(plan=[OBS, second], delay=0.01)
     await run(agents)
     assert agents.events.index(("end", "r1-obs")) < agents.events.index(("start", "r1-dep"))
     assert agents.peak_running == 1
-    assert agents.upstream["r1-dep"] == ["finding r1-obs"]
+    assert agents.context["r1-dep"] == ["finding r1-obs"]
 
 
 async def test_critic_feedback_starts_a_new_round_with_more_evidence():
@@ -303,7 +303,7 @@ async def test_dependent_task_still_runs_when_its_dependency_failed():
     second = TaskSpec(id="dep", agent="dependency", question="q", depends_on=["obs"])
     agents = StubAgents(plan=[OBS, second], fail={"r1-obs": ValueError("bad")})
     report = await run(agents)
-    assert agents.upstream["r1-dep"] == []
+    assert agents.context["r1-dep"] == []
     assert {c.text for c in report.facts} == {"fact r1-dep"}
 
 
@@ -314,14 +314,14 @@ async def test_task_after_mixed_success_and_failure_runs_exactly_once(error):
     await run(agents)
     assert agents.events.count(("start", "r1-join")) == 1
     assert agents.events.count(("start", "r1-obs")) == 1
-    assert agents.upstream["r1-join"] == ["finding r1-obs"]
+    assert agents.context["r1-join"] == ["finding r1-obs"]
 
 
 async def test_failed_task_with_slower_sibling_is_not_dispatched_again():
     class SlowSibling(StubAgents):
-        async def investigate(self, task, incident, upstream):
+        async def investigate(self, task, incident, context):
             self.delay = 0.05 if task.id == "r1-obs" else 0
-            return await super().investigate(task, incident, upstream)
+            return await super().investigate(task, incident, context)
 
     agents = SlowSibling(fail={"r1-dep": ValueError("bad")})
     await run(agents)
@@ -594,3 +594,112 @@ async def test_quota_exhaustion_is_reported_rather_than_looking_inconclusive(nod
     report = await investigate(INCIDENT, agents, budget)
     assert report.stop_reason == "provider_quota_exhausted"
     assert agents.calls["report"] == 0
+
+
+async def test_later_rounds_see_every_earlier_finding():
+    agents = StubAgents(critiques=[MORE, ACCEPT])
+    await run(agents)
+    assert agents.context["r1-obs"] == [] and agents.context["r1-dep"] == []
+    assert set(agents.context["r2-obs"]) == {"finding r1-obs", "finding r1-dep"}
+
+
+def test_context_puts_dependencies_first_and_skips_the_task_itself():
+    from investigator.graph import _context_for
+    from investigator.schemas import Task
+
+    def done(id, deps=()):
+        finding = Finding(summary=id, claims=[], gaps=[])
+        return Task(
+            id=id,
+            agent="dependency",
+            question="q",
+            depends_on=list(deps),
+            status="done",
+            finding=finding,
+        )
+
+    tasks = {"a": done("a"), "b": done("b"), "c": done("c", ["b"])}
+    assert [f.summary for f in _context_for(tasks["c"], tasks)] == ["b", "a"]
+
+
+class TiedAgents(StubAgents):
+    """Two causes with the same support, until a later round finds a row only one explains."""
+
+    async def reason(self, incident, findings, ledger, gaps, critique):
+        self._enter("reason")
+        rows = sorted(ledger)
+        first = Hypothesis(
+            id="h1",
+            statement="cause one",
+            category="resource_exhaustion",
+            component="api",
+            supporting=rows,
+            contradicting=[],
+            assumptions=[],
+        )
+        second = first.model_copy(
+            update={"id": "h2", "statement": "cause two", "category": "traffic_surge"}
+        )
+        return HypothesisSet(hypotheses=[first, second])
+
+    async def verify(self, hypotheses, ledger):
+        self._enter("verify")
+        rows = sorted(ledger)
+        shared = rows[:2]
+        extra = rows[2:]  # rows found later support only the first cause
+        return Verification(
+            verdicts=[
+                HypothesisVerdict(
+                    hypothesis_id="h1",
+                    rows=[
+                        RowVerdict(evidence_id=r, label="supports", reason="")
+                        for r in shared + extra
+                    ],
+                ),
+                HypothesisVerdict(
+                    hypothesis_id="h2",
+                    rows=[RowVerdict(evidence_id=r, label="supports", reason="") for r in shared],
+                ),
+            ]
+        )
+
+
+async def test_a_tie_asks_for_separating_evidence_and_then_concludes():
+    agents = TiedAgents(critiques=[ACCEPT, ACCEPT])
+    report = await run(agents)
+    assert agents.calls["plan"] == 2  # the tie triggered a second round
+    assert report.outcome == "conclusive" and report.hypotheses[0].id == "h1"
+
+
+async def test_a_tie_that_never_breaks_still_ends_inconclusive():
+    class AlwaysTied(TiedAgents):
+        async def verify(self, hypotheses, ledger):
+            self._enter("verify")
+            rows = [RowVerdict(evidence_id=r, label="supports", reason="") for r in sorted(ledger)]
+            return Verification(
+                verdicts=[HypothesisVerdict(hypothesis_id=h, rows=rows) for h in ("h1", "h2")]
+            )
+
+    report = await run(AlwaysTied(critiques=[ACCEPT, ACCEPT, ACCEPT]))
+    assert report.outcome == "inconclusive"
+    assert report.stop_reason in {"max_rounds_reached", "no_new_evidence"}
+    assert any("lead" in reason for reason in report.outcome_reasons)
+
+
+async def test_no_tie_request_when_the_critic_rejects_or_confidence_is_low():
+    reject = Critique(verdict="insufficient", objections=[], requests=[])
+    agents = TiedAgents(critiques=[reject])
+    report = await run(agents)
+    assert agents.calls["plan"] == 1 and report.stop_reason == "critic_insufficient"
+
+
+async def test_no_tie_request_when_both_causes_are_low_confidence():
+    class LowTie(TiedAgents):
+        async def verify(self, hypotheses, ledger):
+            self._enter("verify")
+            return Verification(verdicts=[])  # nothing verified: both causes stay low
+
+    agents = LowTie(critiques=[ACCEPT, ACCEPT])
+    report = await run(agents)
+    assert agents.calls["plan"] == 1
+    assert report.outcome == "inconclusive" and report.stop_reason == "critic_accepted"

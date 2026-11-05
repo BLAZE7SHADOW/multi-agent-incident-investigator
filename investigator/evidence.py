@@ -187,6 +187,11 @@ def rank_hypotheses(
     return sorted(assessed, key=lambda h: (h.net_support, h.verified_ratio), reverse=True)
 
 
+def has_clear_lead(ranked: Sequence[RankedHypothesis]) -> bool:
+    """The top cause must beat the runner-up. Rows supporting both cancel out in the difference."""
+    return len(ranked) < 2 or ranked[0].net_support - ranked[1].net_support >= MIN_LEAD
+
+
 def decide_outcome(
     ranked: Sequence[RankedHypothesis], critique: Critique | None
 ) -> tuple[Outcome, list[str]]:
@@ -199,7 +204,7 @@ def decide_outcome(
         reasons.append("the critic did not accept the conclusion")
     if top.confidence == "low":
         reasons.append("the top hypothesis has low confidence")
-    if len(ranked) > 1 and top.net_support - ranked[1].net_support < MIN_LEAD:
+    if not has_clear_lead(ranked):
         reasons.append(f"no clear lead over the alternative '{ranked[1].id}'")
     return ("inconclusive" if reasons else "conclusive"), reasons
 
