@@ -27,7 +27,9 @@ def test_llm_schemas_stay_portable(schema):
 def test_no_llm_schema_can_self_report_a_score():
     for schema in LLM_OUTPUT_SCHEMAS:
         for node in _walk(schema.model_json_schema()):
-            assert not {"score", "confidence", "faithfulness"} & set(node.get("properties", {}))
+            assert not {"score", "confidence", "verified_ratio", "faithfulness"} & set(
+                node.get("properties", {})
+            )
 
 
 def test_usage_adds():

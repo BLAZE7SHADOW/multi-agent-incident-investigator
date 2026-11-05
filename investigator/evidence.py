@@ -1,6 +1,5 @@
-"""Deterministic checks on LLM output. LLMs judge the evidence; this code decides what stands."""
+"""Evidence rules required for every conclusion. LLMs judge meaning; this code decides."""
 
-import re
 from collections.abc import Iterable, Mapping, Sequence
 
 from langchain_core.messages import BaseMessage
@@ -24,9 +23,9 @@ from investigator.schemas import (
 )
 from investigator.tools import read_tool_result
 
-# Fixed before any evaluation run. Do not tune these against the golden set.
-HIGH_FAITHFULNESS = 0.8
-MEDIUM_FAITHFULNESS = 0.5
+# Fixed before any evaluation run. Do not tune these against the test incidents.
+HIGH_VERIFIED_RATIO = 0.8
+MEDIUM_VERIFIED_RATIO = 0.5
 MIN_SOURCES = 2
 MIN_LEAD = 1
 
@@ -37,11 +36,6 @@ _TOOL_SOURCE: dict[str, Source] = {
     "get_dependencies": "dependencies",
     "search_incidents": "history",
 }
-_RISKY_ACTION = re.compile(
-    r"\b(rollback|roll back|revert|restart|redeploy|delete|drop|disable|failover|fail over"
-    r"|scale|migrate|rotate|purge|flush|kill|terminate|shut ?down)",
-    re.IGNORECASE,
-)
 
 
 def collect_evidence(
@@ -146,7 +140,7 @@ def assess_hypothesis(
     supporting = sorted(row for row, label in labels.items() if label == "supports")
     contradicting = sorted(row for row, label in labels.items() if label == "contradicts")
     cited = set(hypothesis.supporting)
-    faithfulness = len(cited & set(supporting)) / len(cited) if cited else 0.0
+    verified_ratio = len(cited & set(supporting)) / len(cited) if cited else 0.0
     sources = {ledger[row].source for row in supporting}
     net_support = len(supporting) - len(contradicting)
 
@@ -155,16 +149,16 @@ def assess_hypothesis(
         hypothesis.category != "unknown"
         and len(sources) >= MIN_SOURCES
         and net_support > 0
-        and faithfulness >= MEDIUM_FAITHFULNESS
+        and verified_ratio >= MEDIUM_VERIFIED_RATIO
     ):
-        strong = faithfulness >= HIGH_FAITHFULNESS and not contradicting
+        strong = verified_ratio >= HIGH_VERIFIED_RATIO and not contradicting
         confidence = "high" if strong and not set(failed_tools) else "medium"
 
     return RankedHypothesis(
         **hypothesis.model_dump(),
         verified_supporting=supporting,
         verified_contradicting=contradicting,
-        faithfulness=faithfulness,
+        verified_ratio=verified_ratio,
         net_support=net_support,
         confidence=confidence,
     )
@@ -181,7 +175,7 @@ def rank_hypotheses(
     verdicts = verification.verdicts if verification else []
     labels = {v.hypothesis_id: {row.evidence_id: row.label for row in v.rows} for v in verdicts}
     assessed = [assess_hypothesis(h, labels.get(h.id, {}), ledger, failed) for h in hypotheses]
-    return sorted(assessed, key=lambda h: (h.net_support, h.faithfulness), reverse=True)
+    return sorted(assessed, key=lambda h: (h.net_support, h.verified_ratio), reverse=True)
 
 
 def decide_outcome(
@@ -204,17 +198,13 @@ def decide_outcome(
 def clean_actions(
     actions: Sequence[Action], ranked: Sequence[RankedHypothesis], outcome: Outcome
 ) -> list[RecommendedAction]:
-    """Actions are recommendations only. Approval needs can be raised here but never lowered."""
+    """Actions are recommendations only, and always need approval if the cause is unconfirmed."""
     known = {hypothesis.id for hypothesis in ranked}
     cleaned = []
     for action in actions:
         if outcome == "conclusive" and action.hypothesis_id not in known:
             continue
-        needs_approval = (
-            outcome == "inconclusive"
-            or action.risk == "high"
-            or bool(_RISKY_ACTION.search(action.description))
-        )
+        needs_approval = outcome == "inconclusive" or action.risk == "high"
         cleaned.append(
             RecommendedAction(**action.model_dump(), requires_human_approval=needs_approval)
         )

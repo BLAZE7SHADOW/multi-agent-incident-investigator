@@ -23,7 +23,7 @@ CauseCategory = Literal[
 ]
 Confidence = Literal["low", "medium", "high"]
 Outcome = Literal["conclusive", "inconclusive"]
-RowLabel = Literal["supports", "contradicts", "irrelevant"]
+RowLabel = Literal["supports", "contradicts", "symptom", "irrelevant"]
 
 
 class Limits(BaseModel):
@@ -51,7 +51,7 @@ class Usage(BaseModel):
 
 
 class Grounding(BaseModel):
-    """Citation quality as the LLM produced it, before guardrails clean it up."""
+    """Citation quality as the LLM produced it, before the evidence rules clean it up."""
 
     citations: int = 0
     valid_citations: int = 0
@@ -131,7 +131,7 @@ class HypothesisSet(BaseModel):
 class RowVerdict(BaseModel):
     evidence_id: str
     label: RowLabel = Field(
-        description="A row that shows only the symptom does not support a cause"
+        description="supports: shows this cause. symptom: shows only the incident's effects."
     )
     reason: str
 
@@ -185,7 +185,7 @@ class RankedHypothesis(Hypothesis):
 
     verified_supporting: list[str] = []
     verified_contradicting: list[str] = []
-    faithfulness: float = 0.0
+    verified_ratio: float = 0.0
     net_support: int = 0
     confidence: Confidence = "low"
 
@@ -229,7 +229,7 @@ class InvestigationState(TypedDict, total=False):
     report: Report
 
 
-# --- Golden dataset ---
+# --- Test incidents ---
 
 
 class Fault(BaseModel):
@@ -268,7 +268,7 @@ class Truth(BaseModel):
     trap_component: str = Field(default="", description="The wrong answer this case invites")
 
 
-class GoldenCase(BaseModel):
+class Case(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     incident: Incident
@@ -279,7 +279,7 @@ class GoldenCase(BaseModel):
     truth: Truth
 
     @model_validator(mode="after")
-    def _check_key_evidence_exists(self) -> "GoldenCase":
+    def _check_key_evidence_exists(self) -> "Case":
         missing = set(self.truth.key_evidence) - self.world.row_ids()
         if missing:
             raise ValueError(f"{self.incident.id}: unknown key_evidence {sorted(missing)}")

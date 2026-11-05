@@ -1,5 +1,5 @@
-# Golden dataset: a fictional online shop. `world` is all that tools can see; `truth` is for scoring.
-# To add a production finding, redact it, confirm the true cause by hand, and append a case.
+# The assignment's test incidents: a fictional online shop. `world` is all tools can see; `truth`
+# is only for scoring. Frozen, so assignment results stay comparable. Do not add cases here.
 
 topology:
   - {id: top-01, service: gateway, depends_on: checkout}

@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 import pytest
@@ -5,19 +6,18 @@ from fakes import ScriptedChatModel, reply
 from langchain.agents import create_agent
 from pydantic import BaseModel, ValidationError
 
-from investigator.guardrails import collect_evidence
-from investigator.schemas import Fault, GoldenCase, ToolResult, World
+from investigator.schemas import Case, Fault, ToolResult, World
 from investigator.tools import (
     MAX_ROWS,
     ToolFault,
     build_tools,
-    load_golden,
+    load_cases,
     read_tool_result,
-    tool_middleware,
+    tool_retry,
     wrap_untrusted,
 )
 
-CASES = load_golden()
+CASES = load_cases()
 LOG = {"id": "log-1", "ts": "2026-01-01T10:00", "service": "api", "level": "ERROR", "msg": "boom"}
 METRIC = {
     "id": "met-1",
@@ -38,7 +38,7 @@ async def call(tool, **args):
     return read_tool_result(await tool.ainvoke(args))
 
 
-def case(incident_id: str) -> GoldenCase:
+def case(incident_id: str) -> Case:
     return next(c for c in CASES if c.incident.id == incident_id)
 
 
@@ -68,7 +68,7 @@ def test_case_with_unknown_key_evidence_is_rejected():
     raw = case("INC-01").model_dump()
     raw["truth"]["key_evidence"] = ["log-99"]
     with pytest.raises(ValidationError, match="log-99"):
-        GoldenCase.model_validate(raw)
+        Case.model_validate(raw)
 
 
 def test_world_rejects_extra_fields_so_answers_cannot_hide_there():
@@ -236,8 +236,8 @@ def test_wrapper_cannot_be_closed_from_inside_a_row():
 
 
 def test_no_incident_ids_in_source():
-    source = Path(__file__).parent.parent / "investigator"
-    for path in source.glob("*.py"):
+    root = Path(__file__).parent.parent.parent
+    for path in [*root.glob("investigator/*.py"), *root.glob("reliability/*.py")]:
         assert "INC-" not in path.read_text(), f"hardcoded incident ID in {path.name}"
 
 
@@ -256,7 +256,7 @@ async def run_agent(world: World, tool_args: dict, tool_name: str = "query_logs"
         model,
         build_tools(world),
         response_format=Done,
-        middleware=tool_middleware(retry_delay=0),
+        middleware=[tool_retry(retry_delay=0)],
     )
     result = await agent.ainvoke({"messages": [{"role": "user", "content": "investigate"}]})
     return model, next(m for m in result["messages"] if m.type == "tool")
@@ -274,34 +274,14 @@ async def test_persistent_fault_reaches_agent_as_structured_status():
     assert (result.tool, result.status, result.rows) == ("get_deployments", "timeout", [])
 
 
-async def test_secrets_and_emails_are_redacted_before_reaching_the_model():
-    model, message = await run_agent(case("INC-11").world, {"service": "inventory"})
-    sent_to_model = str(model.calls[-1])
-    for leaked in ("sk-live-FAKE000TESTKEY", "ops.oncall@example.com"):
-        assert leaked not in sent_to_model and leaked not in message.content
-    assert "OOMKilled" in message.content
-    assert read_tool_result(message.content).rows[2]["id"] == "log-03"
-
-
-def test_injection_text_stays_inside_the_wrapper():
-    golden = case("INC-11")
-    result_rows = [r for r in golden.world.logs if "SYSTEM OVERRIDE" in r["msg"]]
-    wrapped = wrap_untrusted(ToolResult(tool="query_logs", status="ok", rows=result_rows))
-    assert wrapped.endswith("</untrusted_data>") and wrapped.count("</untrusted_data>") == 1
-
-
-async def test_incident_text_is_redacted_before_reaching_the_model():
-    model = ScriptedChatModel(script=[reply("Done", {"summary": "finished"})])
-    agent = create_agent(model, [], response_format=Done, middleware=tool_middleware(retry_delay=0))
-    text = "pasted config: password=hunter2secret from a.person@example.com"
-    await agent.ainvoke({"messages": [{"role": "user", "content": text}]})
-    sent = str(model.calls[-1])
-    assert "hunter2secret" not in sent and "a.person@example.com" not in sent
-
-
-async def test_evidence_ledger_stores_only_redacted_rows():
-    _, message = await run_agent(case("INC-11").world, {"service": "inventory"})
-    evidence, _, _ = collect_evidence([message])
-    stored = str(evidence)
-    assert "sk-live-FAKE000TESTKEY" not in stored and "ops.oncall@example.com" not in stored
-    assert "log-03" in evidence
+def test_core_never_imports_reliability():
+    """Reliability plugs into the core, so the core must work without it."""
+    root = Path(__file__).parent.parent.parent / "investigator"
+    for path in root.glob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text())):
+            names = []
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                names = [node.module or ""]
+            assert not any(n.split(".")[0] == "reliability" for n in names), path.name
