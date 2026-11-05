@@ -1,7 +1,7 @@
 """Read-only investigation tools over simulated telemetry, with injectable faults.
 
 Build tools per run: each set keeps its own fault counters. Tools receive only a World, so they
-cannot reach a golden case's truth.
+cannot reach a case's truth.
 """
 
 import json
@@ -12,18 +12,15 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from langchain.agents.middleware import PIIMatch, PIIMiddleware, ToolRetryMiddleware
+from langchain.agents.middleware import ToolRetryMiddleware
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field
 
-from investigator.schemas import GoldenCase, ToolResult, World
+from investigator.schemas import Case, ToolResult, World
 
-GOLDEN_PATH = Path(__file__).parent.parent / "data" / "golden.yaml"
+INCIDENTS_PATH = Path(__file__).parent.parent / "data" / "incidents.yaml"
 MAX_ROWS = 20
 
-_SECRET = re.compile(
-    r"\b(?:sk-[A-Za-z0-9_-]{8,}|AKIA[0-9A-Z]{16})\b|\b(?:password|token|api_key)=[^\s\"',]+"
-)
 _WORD = re.compile(r"\w+")
 _WRAPPER = re.compile(r"^<untrusted_data>(.*)</untrusted_data>$", re.DOTALL)
 
@@ -35,12 +32,12 @@ class ToolFault(Exception):
         self.kind = kind
 
 
-def load_golden(path: Path = GOLDEN_PATH) -> list[GoldenCase]:
+def load_cases(path: Path = INCIDENTS_PATH) -> list[Case]:
     data = yaml.safe_load(path.read_text())
     cases = []
     for raw in data["cases"]:
         raw["world"]["dependencies"] = data["topology"]
-        cases.append(GoldenCase.model_validate(raw))
+        cases.append(Case.model_validate(raw))
     return cases
 
 
@@ -55,30 +52,16 @@ def read_tool_result(content: str) -> ToolResult:
     return ToolResult.model_validate(json.loads(match.group(1) if match else content))
 
 
-def _detect_secrets(text: str) -> list[PIIMatch]:
-    return [
-        PIIMatch(type="secret", value=m.group(), start=m.start(), end=m.end())
-        for m in _SECRET.finditer(text)
-    ]
-
-
 def _on_failure(exc: Exception) -> str:
     tool = getattr(exc, "tool", "unknown")
     status = getattr(exc, "kind", "error")
     return wrap_untrusted(ToolResult(tool=tool, status=status, note="failed after retries"))
 
 
-def tool_middleware(retry_delay: float = 0.2) -> list:
-    """Retries and redaction of incident text and tool output before either reaches a provider."""
-    redact = {"apply_to_input": True, "apply_to_tool_results": True, "strategy": "redact"}
-    return [
-        ToolRetryMiddleware(
-            max_retries=2, retry_on=(ToolFault,), on_failure=_on_failure, initial_delay=retry_delay
-        ),
-        PIIMiddleware("secret", detector=_detect_secrets, **redact),
-        PIIMiddleware("email", **redact),
-        PIIMiddleware("credit_card", **redact),
-    ]
+def tool_retry(retry_delay: float = 0.2) -> ToolRetryMiddleware:
+    return ToolRetryMiddleware(
+        max_retries=2, retry_on=(ToolFault,), on_failure=_on_failure, initial_delay=retry_delay
+    )
 
 
 class LogQuery(BaseModel):

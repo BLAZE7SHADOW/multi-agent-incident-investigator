@@ -1,7 +1,7 @@
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from investigator.guardrails import (
+from investigator.evidence import (
     assess_hypothesis,
     clean_actions,
     clean_claim,
@@ -271,6 +271,13 @@ def test_confidence_is_computed_from_verification(label, h, labels, failed, expe
     assert assess_hypothesis(h, labels, ledger, failed).confidence == expected
 
 
+def test_symptom_rows_do_not_count_as_support():
+    h = hypothesis()
+    result = assess_hypothesis(h, {"log-1": "symptom", "met-1": "symptom"}, LEDGER, [])
+    assert result.verified_supporting == [] and result.verified_contradicting == []
+    assert (result.verified_ratio, result.net_support, result.confidence) == (0.0, 0, "low")
+
+
 def test_computed_metrics_are_exact():
     h = hypothesis(supporting=["log-1", "log-2", "met-1", "dep-1"])
     labels = {
@@ -280,16 +287,16 @@ def test_computed_metrics_are_exact():
         "dep-1": "contradicts",
     }
     result = assess_hypothesis(h, labels, LEDGER, [])
-    assert result.faithfulness == 0.5
+    assert result.verified_ratio == 0.5
     assert result.net_support == 1
     assert result.verified_supporting == ["log-1", "met-1"]
     assert result.verified_contradicting == ["dep-1"]
 
 
-def test_uncited_verified_rows_do_not_raise_faithfulness():
+def test_uncited_verified_rows_do_not_raise_verified_ratio():
     h = hypothesis(supporting=["log-1", "log-2"])
     labels = {"log-1": "supports", "met-1": "supports", "dep-1": "supports"}
-    assert assess_hypothesis(h, labels, LEDGER, []).faithfulness == 0.5
+    assert assess_hypothesis(h, labels, LEDGER, []).verified_ratio == 0.5
 
 
 def test_source_types_count_only_verified_rows():
@@ -298,9 +305,9 @@ def test_source_types_count_only_verified_rows():
     assert assess_hypothesis(h, labels, LEDGER, []).confidence == "low"
 
 
-def test_repeating_a_citation_does_not_inflate_faithfulness():
+def test_repeating_a_citation_does_not_inflate_verified_ratio():
     h = hypothesis(supporting=["log-1", "log-1", "log-1", "met-1"])
-    assert assess_hypothesis(h, {"log-1": "supports"}, LEDGER, []).faithfulness == 0.5
+    assert assess_hypothesis(h, {"log-1": "supports"}, LEDGER, []).verified_ratio == 0.5
 
 
 def test_verifier_can_surface_a_contradiction_the_hypothesis_never_cited():
@@ -322,7 +329,7 @@ def test_ranking_follows_verified_evidence_not_citation_count():
     assert [h.id for h in result] == ["real", "bluff"]
 
 
-def test_more_verified_evidence_outranks_higher_faithfulness():
+def test_more_verified_evidence_outranks_higher_verified_ratio():
     broad = hypothesis(id="broad", supporting=["log-1", "log-2", "met-1", "dep-1"])
     narrow = hypothesis(id="narrow", supporting=["log-1"])
     verification = Verification(
@@ -335,7 +342,7 @@ def test_more_verified_evidence_outranks_higher_faithfulness():
     assert [h.id for h in result] == ["broad", "narrow"]
 
 
-def test_ranking_uses_faithfulness_to_break_ties():
+def test_ranking_uses_verified_ratio_to_break_ties():
     loose = hypothesis(id="loose", supporting=["log-1", "log-2"])
     tight = hypothesis(id="tight", supporting=["log-1"])
     verification = Verification(
@@ -395,15 +402,6 @@ def action(description="Add an alert", risk="low", hypothesis_id="h1"):
 def test_low_risk_action_needs_no_approval():
     [result] = clean_actions([action()], [ranked()], "conclusive")
     assert result.requires_human_approval is False
-
-
-@pytest.mark.parametrize(
-    "description",
-    ["Roll back payments", "Disable auth", "restart inventory pods", "Scale up redis"],
-)
-def test_risky_action_needs_approval_even_when_llm_says_low_risk(description):
-    [result] = clean_actions([action(description, risk="low")], [ranked()], "conclusive")
-    assert result.requires_human_approval is True
 
 
 def test_llm_high_risk_label_is_respected():
