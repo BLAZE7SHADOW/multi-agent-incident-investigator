@@ -162,7 +162,7 @@ async def test_critic_sees_computed_standing_and_raw_evidence():
     assert "verified_ratio" in prompt and "net_support" in prompt and "log-1" in prompt
 
 
-async def test_upstream_finding_reaches_the_dependent_task():
+async def test_earlier_findings_reach_the_dependent_task():
     dependent = {**task("d", "dependency"), "depends_on": ["o"]}
     plan = reply("Plan", {"tasks": [task("o", "observability"), dependent]})
     found = {"summary": "api failed first", "claims": [], "gaps": []}

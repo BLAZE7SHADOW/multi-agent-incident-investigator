@@ -31,8 +31,8 @@ class Limits(BaseModel):
     max_tool_calls: int = 25
     max_tokens: int = 80_000
     max_seconds: float = 300
-    max_task_steps: int = 4
-    max_task_tool_calls: int = 5
+    max_task_steps: int = 6
+    max_task_tool_calls: int = 6
     max_tasks_per_round: int = 4
     node_timeout_s: float = 120
 

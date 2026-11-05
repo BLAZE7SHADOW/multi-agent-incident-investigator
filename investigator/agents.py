@@ -256,12 +256,12 @@ class LLMAgents:
         return await self._ask(self._orchestrator, "\n\n".join(parts))
 
     async def investigate(
-        self, task: Task, incident: Incident, upstream: list[Finding]
+        self, task: Task, incident: Incident, context: list[Finding]
     ) -> TaskOutcome:
         parts = [_incident(incident), f"Your question:\n{_data(task.question)}"]
-        if upstream:
-            summaries = [finding.summary for finding in upstream]
-            parts.append(f"Findings from tasks this one depends on:\n{_data(summaries)}")
+        if context:
+            summaries = [finding.summary for finding in context]
+            parts.append(f"Findings so far, from other tasks:\n{_data(summaries)}")
         result = await self._specialists[task.agent].ainvoke(
             {"messages": [HumanMessage("\n\n".join(parts))]}
         )

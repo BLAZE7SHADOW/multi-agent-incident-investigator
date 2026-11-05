@@ -25,6 +25,7 @@ from investigator.evidence import (
     clean_verification,
     collect_evidence,
     decide_outcome,
+    has_clear_lead,
     rank_hypotheses,
 )
 from investigator.schemas import (
@@ -32,6 +33,7 @@ from investigator.schemas import (
     Claim,
     Critique,
     Evidence,
+    EvidenceRequest,
     Finding,
     Hypothesis,
     HypothesisSet,
@@ -62,7 +64,7 @@ class Agents(Protocol):
     async def plan(self, incident: Incident, critique: Critique | None, ledger: Ledger) -> Plan: ...
 
     async def investigate(
-        self, task: Task, incident: Incident, upstream: list[Finding]
+        self, task: Task, incident: Incident, context: list[Finding]
     ) -> TaskOutcome: ...
 
     async def reason(
@@ -97,7 +99,7 @@ class Agents(Protocol):
 class TaskInput(TypedDict):
     task: Task
     incident: Incident
-    upstream: list[Finding]
+    context: list[Finding]
     ledger: dict[str, Evidence]
 
 
@@ -135,6 +137,28 @@ def _ready_tasks(tasks: Mapping[str, Task]) -> list[Task]:
         if task.status == "pending"
         and all(dep in tasks and tasks[dep].status != "pending" for dep in task.depends_on)
     ]
+
+
+def _context_for(task: Task, tasks: Mapping[str, Task]) -> list[Finding]:
+    """A shared blackboard: the findings this task depends on first, then every other finding."""
+    order = [*task.depends_on, *(t for t in tasks if t not in task.depends_on)]
+    return [tasks[t].finding for t in order if t != task.id and tasks[t].finding]
+
+
+def _separating_request(top: RankedHypothesis, rival: RankedHypothesis) -> Critique:
+    """Two causes tie on evidence, so ask for a row that only one of them would explain."""
+    question = (
+        f"Two causes are equally supported: (1) {top.statement} (2) {rival.statement}. "
+        "Find evidence that one predicts and the other does not."
+    )
+    return Critique(
+        verdict="investigate",
+        objections=[f"'{top.id}' and '{rival.id}' are equally supported by the evidence"],
+        requests=[
+            EvidenceRequest(agent=agent, question=question, reason="break a tie")
+            for agent in ("observability", "dependency")
+        ],
+    )
 
 
 def _unique(items: Sequence[str]) -> list[str]:
@@ -281,7 +305,7 @@ def build_graph(
                 TaskInput(
                     task=task,
                     incident=state["incident"],
-                    upstream=[tasks[dep].finding for dep in task.depends_on if tasks[dep].finding],
+                    context=_context_for(task, tasks),
                     ledger=ledger,
                 ),
             )
@@ -290,7 +314,7 @@ def build_graph(
 
     async def run_task(payload: TaskInput) -> dict:
         task = payload["task"]
-        outcome = await agents.investigate(task, payload["incident"], payload["upstream"])
+        outcome = await agents.investigate(task, payload["incident"], payload["context"])
         evidence, gaps, failed = collect_evidence(outcome.messages)
         finding, grounding = clean_finding(outcome.finding, {**payload["ledger"], **evidence})
         done = task.model_copy(update={"status": "done", "finding": finding})
@@ -383,10 +407,15 @@ def build_graph(
         critique = await agents.criticize(
             state["incident"], ranked, state.get("evidence", {}), state.get("gaps", [])
         )
+        trace = [f"critic: {critique.verdict}, {len(critique.requests)} requests"]
+        tied = critique.verdict == "accept" and ranked[0].confidence != "low"
+        if tied and not has_clear_lead(ranked):
+            critique = _separating_request(ranked[0], ranked[1])
+            trace.append("evidence rules: top two causes tie, requesting separating evidence")
         return {
             "critique": critique,
             "stop_reason": _stop_after(state, critique),
-            "trace": [f"critic: {critique.verdict}, {len(critique.requests)} requests"],
+            "trace": trace,
             "usage": budget.usage,
         }
 
