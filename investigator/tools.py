@@ -121,7 +121,7 @@ def _most_useful_logs(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]],
     """
     if len(rows) <= MAX_ROWS:
         return rows, ""
-    ranked = sorted(rows, key=lambda r: r["ts"], reverse=True)
+    ranked = sorted(rows, key=lambda r: (r["ts"], r["id"]), reverse=True)
     ranked.sort(key=lambda r: _SEVERITY.get(r["level"], 2))
     kept = sorted(ranked[:MAX_ROWS], key=lambda r: (r["ts"], r["id"]))
     note = (

@@ -167,6 +167,17 @@ async def test_selection_does_not_depend_on_storage_order():
     assert [r["id"] for r in forward.rows] == [r["id"] for r in backward.rows]
 
 
+async def test_ties_in_time_and_level_do_not_depend_on_storage_order():
+    rows = [
+        {**LOG, "id": f"log-{i:02d}", "level": "INFO", "ts": "2026-01-01T10:00"} for i in range(25)
+    ]
+    tool = "query_logs"
+    forward = await call(tools_for(logs=rows)[tool], service="api")
+    backward = await call(tools_for(logs=list(reversed(rows)))[tool], service="api")
+    assert [r["id"] for r in forward.rows] == [r["id"] for r in backward.rows]
+    assert [r["id"] for r in forward.rows] == [f"log-{i:02d}" for i in range(5, 25)]
+
+
 async def test_uncapped_logs_are_unchanged_and_carry_no_note():
     rows = many_logs([("INFO", h) for h in range(MAX_ROWS)])
     result = await call(tools_for(logs=rows)["query_logs"], service="api")
