@@ -104,6 +104,12 @@ def test_inconclusive_case_is_correct_only_when_inconclusive():
     assert concluded.correct is False and concluded.wrong_conclusion is True
 
 
+def test_runner_up_is_recorded_to_explain_failures():
+    rival = hypothesis(category="config_change", component="db")
+    assert score(rep=report(hypotheses=[hypothesis(), rival])).runner_up == "config_change/db net=0"
+    assert score().runner_up == ""
+
+
 def test_no_hypotheses_is_handled():
     result = score(rep=report(outcome="inconclusive", hypotheses=[]))
     assert result.correct is False and result.evidence_recall is None

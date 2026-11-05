@@ -5,7 +5,7 @@ from statistics import mean, median
 
 from pydantic import BaseModel
 
-from investigator.schemas import Case, Report
+from investigator.schemas import Case, RankedHypothesis, Report
 
 # Runs ended by these say nothing about the system, so they are excluded rather than scored.
 INVALID_STOPS = {"provider_quota_exhausted"}
@@ -27,6 +27,7 @@ class RunScore(BaseModel):
     top_confidence: str = ""
     stop_reason: str = ""
     outcome_reasons: list[str] = []
+    runner_up: str = ""
     wrong_conclusion: bool = False
     missed_conclusion: bool = False
     fell_for_trap: bool = False
@@ -42,6 +43,10 @@ class RunScore(BaseModel):
     total_tokens: int = 0
     latency_s: float = 0.0
     gaps: int = 0
+
+
+def _describe(hypothesis: RankedHypothesis) -> str:
+    return f"{hypothesis.category}/{hypothesis.component} net={hypothesis.net_support}"
 
 
 def score_run(case: Case, report: Report, system: str, repeat: int, latency_s: float) -> RunScore:
@@ -79,6 +84,7 @@ def score_run(case: Case, report: Report, system: str, repeat: int, latency_s: f
         top_confidence=top.confidence if top else "",
         stop_reason=report.stop_reason,
         outcome_reasons=report.outcome_reasons,
+        runner_up=_describe(report.hypotheses[1]) if len(report.hypotheses) > 1 else "",
         wrong_conclusion=concluded and not correct,
         missed_conclusion=truth.outcome == "conclusive" and not concluded,
         fell_for_trap=bool(
