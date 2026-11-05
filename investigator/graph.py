@@ -13,7 +13,7 @@ from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.errors import NodeError
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Command, RetryPolicy, Send
+from langgraph.types import Command, Send
 from pydantic import BaseModel
 
 from investigator import schemas
@@ -27,7 +27,6 @@ from investigator.evidence import (
     decide_outcome,
     rank_hypotheses,
 )
-from investigator.llm import is_transient
 from investigator.schemas import (
     Action,
     Claim,
@@ -339,7 +338,8 @@ def build_graph(
     async def criticize(state: InvestigationState) -> dict:
         ranked = _ranked(state)
         if not ranked:
-            return {"critique": None, "stop_reason": "no_hypotheses", "usage": budget.usage}
+            stop = budget.stop_reason() or "no_hypotheses"
+            return {"critique": None, "stop_reason": stop, "usage": budget.usage}
         critique = await agents.criticize(
             state["incident"], ranked, state.get("evidence", {}), state.get("gaps", [])
         )
@@ -353,7 +353,7 @@ def build_graph(
     def critic_failed(state: InvestigationState, error: NodeError) -> Command:
         update = {
             "critique": None,
-            "stop_reason": "critic_failed",
+            "stop_reason": budget.stop_reason() or "critic_failed",
             "gaps": [f"critic failed: {type(error.error).__name__}"],
             "usage": budget.usage,
         }
@@ -395,6 +395,7 @@ def build_graph(
             gaps=_unique([*state.get("gaps", []), *extra_gaps]),
             actions=action_policy(actions) if action_policy else actions,
             usage=budget.usage,
+            usage_by_agent=budget.by_agent,
             grounding=state.get("grounding", schemas.Grounding()),
         )
         return {"report": report, "usage": budget.usage, "trace": [f"reporting: {outcome}"]}
@@ -417,10 +418,8 @@ def build_graph(
         update = _report_update(state, ranked, outcome, reasons, draft, [gap])
         return Command(update=update, goto=END)
 
-    retry = RetryPolicy(
-        max_attempts=limits.max_task_attempts, initial_interval=0.2, retry_on=is_transient
-    )
-    guarded = {"retry_policy": retry, "timeout": limits.node_timeout_s}
+    # No retry policy here: tools and models retry inside agents, keeping evidence already gathered.
+    guarded = {"timeout": limits.node_timeout_s}
 
     graph = StateGraph(InvestigationState)
     graph.add_node("orchestrate", orchestrate, error_handler=orchestrate_failed, **guarded)

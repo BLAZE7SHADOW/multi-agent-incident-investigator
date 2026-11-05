@@ -252,11 +252,34 @@ async def test_tool_calls_per_task_are_capped():
     assert report.usage.tool_calls == 2
 
 
-async def test_specialist_prompt_states_its_limits():
+async def test_specialist_prompt_states_its_real_limits():
+    model = scripted()
+    await run(model, Limits(max_task_steps=3, max_task_tool_calls=7))
+    assert "at most 3 turns and 7 tool calls" in prompts_for(model, "Observability")[0]
+
+
+async def test_prompts_carry_only_what_each_agent_needs():
     model = scripted()
     await run(model)
-    prompt = prompts_for(model, "Observability")[0]
-    assert "Never repeat a query" in prompt
+    assert "gaps" not in prompts_for(model, "Reasoning")[0].split("Retrieved evidence")[0]
+    critic = prompts_for(model, "Critic")[0]
+    assert "assumptions" not in critic.split("You are")[-1].split("Known gaps")[0]
+    reporting = prompts_for(model, "Reporting")[0]
+    assert "verified_ratio" not in reporting and "log-1" not in reporting
+
+
+async def test_usage_is_reported_per_agent():
+    report = await run(scripted())
+    assert set(report.usage_by_agent) == {
+        "orchestrator",
+        "observability",
+        "dependency",
+        "reasoning",
+        "verifier",
+        "critic",
+        "reporting",
+    }
+    assert sum(u.llm_calls for u in report.usage_by_agent.values()) == report.usage.llm_calls
 
 
 async def test_step_limit_keeps_retrieved_evidence():

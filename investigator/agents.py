@@ -50,7 +50,7 @@ Plan tasks for two specialists:
 
 Write specific questions, name services and time windows where you can. Tasks with no dependency \
 run in parallel. Use depends_on when one task really needs another's finding, for example checking \
-changes to whichever service observability finds failed first. Plan 2 to 4 tasks.
+changes to whichever service observability finds failed first. Plan 2 or 3 tasks.
 
 If a critic's requests are given, plan only what they need, in 1 or 2 tasks, and do not repeat \
 completed work.
@@ -67,7 +67,7 @@ Method:
 - If a tool fails, it has already been retried. Record a gap and move on; do not call it again. \
 Never guess what it would have shown.
 
-Be economical. You have a few turns and about 8 tool calls for this question:
+Be economical:
 - Answer as soon as the evidence lets you. You do not need to explore everything.
 - Never repeat a query. An empty result is an answer: note it and move on.
 - Only query services named in the incident, your question, or tool results.
@@ -164,20 +164,27 @@ class FinishBeforeLimit(AgentMiddleware):
         return await handler(request)
 
 
+def _wrap(text: str) -> str:
+    """Mark text as untrusted data. Escaping `<` stops content closing the tag early."""
+    escaped = text.replace("<", "\\u003c")
+    return f"<untrusted_data>{escaped}</untrusted_data>"
+
+
 def _data(payload: object) -> str:
-    """Render values as untrusted data. Escaping `<` stops content closing the tag early."""
-    body = json.dumps(payload, default=str, indent=1).replace("<", "\\u003c")
-    return f"<untrusted_data>{body}</untrusted_data>"
+    return _wrap(json.dumps(payload, default=str, separators=(",", ":")))
 
 
 def _incident(incident: Incident) -> str:
-    fields = incident.model_dump(exclude={"id"})
-    return f"Incident:\n{_data(fields)}"
+    return f"Incident:\n{_data(incident.model_dump(exclude={'id'}))}"
 
 
 def _ledger(ledger: Mapping[str, Evidence]) -> str:
-    rows = [row.model_dump() for row in ledger.values()]
-    return f"Retrieved evidence:\n{_data(rows)}"
+    rows = "\n".join(f"{row.source}: {row.content}" for row in ledger.values())
+    return f"Retrieved evidence:\n{_wrap(rows)}"
+
+
+def _standing(ranked: Sequence[RankedHypothesis], *fields: str) -> str:
+    return _data([h.model_dump(include=set(fields)) for h in ranked])
 
 
 class LLMAgents:
@@ -190,39 +197,45 @@ class LLMAgents:
         budget: RunBudget,
         extra_middleware: Sequence = (),
     ) -> None:
+        limits = budget.limits
+
         def build(
-            system: str, schema: type[BaseModel], allowed: set[str] | frozenset = frozenset()
+            name: str, system: str, schema: type[BaseModel], allowed: frozenset = frozenset()
         ):
-            limits = budget.limits
             investigating = [
                 ToolCallLimitMiddleware(run_limit=limits.max_task_tool_calls),
                 tool_retry(),
                 FinishBeforeLimit(limits.max_task_steps),
             ]
-            middleware = [
-                budget.middleware(),
-                ModelCallLimitMiddleware(run_limit=limits.max_task_steps, exit_behavior="end"),
-                model_retry(),
-                *(investigating if allowed else []),
-                *extra_middleware,
-            ]
+            if allowed:
+                system += (
+                    f"\n\nYou have at most {limits.max_task_steps} turns and "
+                    f"{limits.max_task_tool_calls} tool calls."
+                )
             return create_agent(
                 model,
                 [tool for tool in tools if tool.name in allowed],
                 system_prompt=system,
                 response_format=ToolStrategy(schema),
-                middleware=middleware,
+                name=name,
+                middleware=[
+                    budget.middleware(),
+                    ModelCallLimitMiddleware(run_limit=limits.max_task_steps, exit_behavior="end"),
+                    model_retry(),
+                    *(investigating if allowed else []),
+                    *extra_middleware,
+                ],
             )
 
-        self._orchestrator = build(_ORCHESTRATOR, Plan)
+        self._orchestrator = build("orchestrator", _ORCHESTRATOR, Plan)
         self._specialists = {
-            "observability": build(_OBSERVABILITY, Finding, _TOOLS_BY_AGENT["observability"]),
-            "dependency": build(_DEPENDENCY, Finding, _TOOLS_BY_AGENT["dependency"]),
+            name: build(name, prompt, Finding, frozenset(_TOOLS_BY_AGENT[name]))
+            for name, prompt in (("observability", _OBSERVABILITY), ("dependency", _DEPENDENCY))
         }
-        self._reasoner = build(_REASONING, HypothesisSet)
-        self._verifier = build(_VERIFIER, Verification)
-        self._critic = build(_CRITIC, Critique)
-        self._reporter = build(_REPORTING, ReportDraft)
+        self._reasoner = build("reasoning", _REASONING, HypothesisSet)
+        self._verifier = build("verifier", _VERIFIER, Verification)
+        self._critic = build("critic", _CRITIC, Critique)
+        self._reporter = build("reporting", _REPORTING, ReportDraft)
 
     @staticmethod
     async def _ask(agent, prompt: str):
@@ -246,7 +259,7 @@ class LLMAgents:
     ) -> TaskOutcome:
         parts = [_incident(incident), f"Your question:\n{_data(task.question)}"]
         if upstream:
-            summaries = [finding.model_dump() for finding in upstream]
+            summaries = [finding.summary for finding in upstream]
             parts.append(f"Findings from tasks this one depends on:\n{_data(summaries)}")
         result = await self._specialists[task.agent].ainvoke(
             {"messages": [HumanMessage("\n\n".join(parts))]}
@@ -267,7 +280,7 @@ class LLMAgents:
     ) -> HypothesisSet:
         parts = [
             _incident(incident),
-            f"Findings:\n{_data([finding.model_dump() for finding in findings])}",
+            f"Findings:\n{_data([f.model_dump(exclude={'gaps'}) for f in findings])}",
             _ledger(ledger),
             f"Known gaps:\n{_data(gaps)}",
         ]
@@ -279,9 +292,7 @@ class LLMAgents:
         self, hypotheses: list[Hypothesis], ledger: Mapping[str, Evidence]
     ) -> Verification:
         # Citations and reasoning are withheld, so the Verifier can't simply agree with them.
-        claims = [
-            h.model_dump(include={"id", "statement", "category", "component"}) for h in hypotheses
-        ]
+        claims = [h.model_dump(include={"id", "statement", "component"}) for h in hypotheses]
         prompt = f"Hypotheses:\n{_data(claims)}\n\n{_ledger(ledger)}"
         return await self._ask(self._verifier, prompt)
 
@@ -294,7 +305,18 @@ class LLMAgents:
     ) -> Critique:
         parts = [
             _incident(incident),
-            f"Ranked hypotheses:\n{_data([h.model_dump() for h in ranked])}",
+            "Ranked hypotheses:\n"
+            + _standing(
+                ranked,
+                "id",
+                "statement",
+                "component",
+                "verified_supporting",
+                "verified_contradicting",
+                "verified_ratio",
+                "net_support",
+                "confidence",
+            ),
             _ledger(ledger),
             f"Known gaps:\n{_data(gaps)}",
         ]
@@ -312,7 +334,8 @@ class LLMAgents:
             _incident(incident),
             f"Decided outcome: {outcome}",
             f"Why it is not conclusive, if applicable:\n{_data(reasons)}",
-            f"Ranked hypotheses:\n{_data([h.model_dump() for h in ranked])}",
+            "Ranked hypotheses:\n"
+            + _standing(ranked, "id", "statement", "component", "confidence"),
             f"Known gaps:\n{_data(gaps)}",
         ]
         return await self._ask(self._reporter, "\n\n".join(parts))
