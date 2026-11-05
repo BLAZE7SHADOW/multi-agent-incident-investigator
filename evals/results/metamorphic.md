@@ -1,5 +1,7 @@
 # Metamorphic test results
 
+Unchanged cases solved: 10/10.
+
 10 incidents with a known cause, each changed 13 ways, for 130 checks. Runs the real tools and evidence rules, with labels from each case's key evidence. No model calls.
 
 | Change | Relation | Passed |

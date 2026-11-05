@@ -48,8 +48,8 @@ RANK = {"low": 0, "medium": 1, "high": 2}
 _TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
 
 
-def load_raw() -> tuple[list[dict], list[dict]]:
-    data = yaml.safe_load(INCIDENTS.read_text())
+def load_raw(path: Path = INCIDENTS) -> tuple[list[dict], list[dict]]:
+    data = yaml.safe_load(path.read_text())
     return data["topology"], [c for c in data["cases"] if c["truth"]["outcome"] == "conclusive"]
 
 
@@ -312,11 +312,16 @@ def check(original: dict, changed: dict, relation: str, renames: dict) -> tuple[
     return True, ""
 
 
-def run_suite() -> list[dict]:
-    topology, cases = load_raw()
+def run_suite(path: Path = INCIDENTS) -> list[dict]:
+    topology, cases = load_raw(path)
     results = []
     for raw in cases:
         original = investigate_offline(raw, topology)
+        truth = raw["truth"]
+        solved = original["outcome"] == "conclusive" and (
+            original["category"],
+            original["component"],
+        ) == (truth["category"], truth["component"])
         for name, (transform, relation) in TRANSFORMS.items():
             changed_raw, changed_topology, renames, extra = transform(raw, topology)
             changed = investigate_offline(changed_raw, changed_topology, extra)
@@ -329,6 +334,7 @@ def run_suite() -> list[dict]:
                     "passed": passed,
                     "detail": detail,
                     "original": original,
+                    "solved": solved,
                 }
             )
     return results
@@ -336,8 +342,13 @@ def run_suite() -> list[dict]:
 
 def render(results: list[dict]) -> str:
     incidents = sorted({r["incident"] for r in results})
+    solved = sorted({r["incident"] for r in results if r["solved"]})
+    unsolved = [i for i in incidents if i not in solved]
     lines = [
         "# Metamorphic test results\n",
+        f"Unchanged cases solved: {len(solved)}/{len(incidents)}"
+        + (f" (not solved: {', '.join(unsolved)})" if unsolved else "")
+        + ".\n",
         f"{len(incidents)} incidents with a known cause, each changed {len(TRANSFORMS)} ways, "
         f"for {len(results)} checks. Runs the real tools and evidence rules, with labels from "
         "each case's key evidence. No model calls.\n",
@@ -361,9 +372,10 @@ def render(results: list[dict]) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--incidents", type=Path, default=INCIDENTS, help="test set to change")
     parser.add_argument("--out", type=Path, default=ROOT / "evals" / "results" / "metamorphic.md")
     args = parser.parse_args()
-    text = render(run_suite())
+    text = render(run_suite(args.incidents))
     args.out.write_text(text)
     print(text)
 

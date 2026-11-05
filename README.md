@@ -53,6 +53,8 @@ A free Gemini key may not be enough. One run made 3 to 23 model requests in our 
 | Score the evidence rules alone | `uv run python -m reliability.rule_eval` | No |
 | Recalculate every saved score | `uv run python -m reliability.audit` | No |
 | Run metamorphic robustness tests | `uv run python -m reliability.metamorphic` | No |
+| Same, on the blind set | `uv run python -m reliability.metamorphic --incidents data/blind_incidents.yaml` | No |
+| Count coverage by category and difficulty | `uv run python -m reliability.coverage` | No |
 
 The full comparison makes 72 runs, used about 1.5M tokens, and stops starting new runs at 2M tokens. It writes to `evals/results/`.
 
@@ -262,24 +264,40 @@ The developer wrote the expected answers, so treat these as evidence, not proof.
 
 | Change | Should | Passed |
 |---|---|---|
-| Rename every service | Not change the answer | 10/10 |
-| Rename metrics, such as `error_rate` to `http_5xx_ratio` | Not change the answer | 10/10 |
-| Rename change kinds, such as `deploy` to `release` | Not change the answer | 10/10 |
+| Rename every service, metric, change kind or row ID | Not change the answer | 40/40 |
 | Deploy tool uses other service names | Not change the answer | 10/10 |
-| Rename row IDs | Not change the answer | 10/10 |
-| Shift all times by 400 days | Not change the answer | 10/10 |
-| Shuffle row order | Not change the answer | 10/10 |
+| Shift all times by 400 days, or shuffle rows | Not change the answer | 20/20 |
 | Add 3 harmless log rows | Not change the answer | 10/10 |
-| Add 25 harmless log rows | Not change the answer | **6/10** |
-| Drop a key evidence row | Not raise confidence | 10/10 |
-| Add a contradicting row | Not raise confidence | 10/10 |
-| **Total** | | **106/110** |
+| Add 25 harmless rows, before or after the report, or as warnings | Not change the answer | 30/30 |
+| Drop a key evidence row, or add a contradicting one | Not raise confidence | 20/20 |
+| **Total** | | **130/130** |
 
-**The suite catches overfitting.** Run against the removed rules, it scores 100/110. Those rules fail when change kinds are renamed, or when the deploy tool names services differently.
+**It catches overfitting:** the removed rules score 100/110 on the original 11 changes.
 
-**It found one real weakness.** The log tool returns the oldest rows first and stops at 20. With 25 harmless older rows, the key evidence is cut off, and 4 incidents lose their right answer. Real log tools usually return the newest rows first. This is not fixed yet.
+**It found a weakness, now fixed:** the log tool returned the oldest 20 rows, so harmless older lines cut off key evidence. Capped results now keep errors, then warnings, then the newest info lines. This took the suite from 122/130 to 130/130. These noise checks were written by the developer of the fix, so the blind set below is the fairer test.
 
-Limits: 10 incidents, oracle labels instead of a real Verifier, and one hypothesis per case, so ties are not tested here. Full detail: [`metamorphic.md`](evals/results/metamorphic.md).
+Full detail: [`metamorphic.md`](evals/results/metamorphic.md).
+
+### Blind test set
+
+[`data/blind_incidents.yaml`](data/blind_incidents.yaml) has 24 incidents for a new fictional bank. A separate agent wrote them without seeing the system's rules, prompts, tests or results. They were committed unchanged before any scoring, and nothing has been tuned on them. It is the same kind of model as the developer, so it is more independent, not fully independent. Blind cases written by a person would be stronger.
+
+Offline scoring of the 18 conclusive cases, with the same labels as above:
+
+| Test | Old log tool | New log tool |
+|---|---|---|
+| Unchanged cases solved | 16/18 | 16/18 |
+| Metamorphic checks | 226/234 | 234/234 |
+| Checks made worse by the fix | | None |
+
+**What this shows:**
+
+- The log fix did no harm on blind cases, but made no difference on them as written. Its gain appears only on noise the developer added.
+- Both unsolved cases log key evidence under another name for the service, such as `card-processing` for `cards`. Tools match service names exactly, and nothing maps one name to the other. A service catalog would fix this. Not fixed, because it was found on this set.
+- The blind set found a bug: a `partial` fault ignores `times`, so partial results never recover. Not fixed, for the same reason. The assignment cases do not use `times` with partial faults, so their results are unaffected.
+- The 6 inconclusive blind cases need a real model to test, which has not been run.
+
+Detail: [`metamorphic_blind.md`](evals/results/metamorphic_blind.md). Coverage of both sets: [`coverage.md`](evals/results/coverage.md).
 
 ### How the calculations are checked
 
