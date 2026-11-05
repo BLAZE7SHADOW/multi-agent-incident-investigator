@@ -64,6 +64,8 @@ def collect_evidence(
             gaps.append(f"{result.tool} unavailable: {result.status}")
         elif result.status == "partial":
             gaps.append(f"{result.tool} returned partial results")
+        elif result.status == "skipped":
+            gaps.append(f"{result.tool} skipped: {result.note}")
     return evidence, gaps, failed
 
 

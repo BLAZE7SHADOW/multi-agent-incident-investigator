@@ -33,6 +33,8 @@ class Limits(BaseModel):
     max_seconds: float = 300
     max_task_steps: int = 6
     max_task_attempts: int = 2
+    max_tasks_per_round: int = 6
+    node_timeout_s: float = 120
 
 
 class Usage(BaseModel):
@@ -44,6 +46,10 @@ class Usage(BaseModel):
     def __add__(self, other: "Usage") -> "Usage":
         fields = type(self).model_fields
         return Usage(**{name: getattr(self, name) + getattr(other, name) for name in fields})
+
+    def peak(self, other: "Usage") -> "Usage":
+        fields = type(self).model_fields
+        return Usage(**{n: max(getattr(self, n), getattr(other, n)) for n in fields})
 
     @property
     def total_tokens(self) -> int:
@@ -76,7 +82,7 @@ class Incident(BaseModel):
 
 class ToolResult(BaseModel):
     tool: str
-    status: Literal["ok", "partial", "timeout", "error"]
+    status: Literal["ok", "partial", "timeout", "error", "skipped"]
     rows: list[dict[str, Any]] = []
     note: str = ""
     truncated: bool = False
@@ -206,10 +212,17 @@ class Report(BaseModel):
     actions: list[RecommendedAction]
     usage: Usage
     grounding: Grounding = Grounding()
+    outcome_reasons: list[str] = []
+    inferences: list[Claim] = []
 
 
 def _merge(left: dict, right: dict) -> dict:
     return {**left, **right}
+
+
+def _peak(left: Usage, right: Usage) -> Usage:
+    """Nodes report the run's running total, so parallel writes keep the highest."""
+    return left.peak(right)
 
 
 class InvestigationState(TypedDict, total=False):
@@ -220,11 +233,12 @@ class InvestigationState(TypedDict, total=False):
     failed_tools: Annotated[list[str], add]
     grounding: Annotated[Grounding, add]
     trace: Annotated[list[str], add]
-    usage: Annotated[Usage, add]
+    usage: Annotated[Usage, _peak]
     hypotheses: list[Hypothesis]
     verification: Verification | None
     critique: Critique | None
     round: int
+    evidence_seen: int
     stop_reason: str
     report: Report
 

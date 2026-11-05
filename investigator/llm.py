@@ -10,6 +10,10 @@ _PERMANENT_STATUS = {400, 401, 403, 404, 422}
 _PROGRAMMING_ERRORS = (ValueError, TypeError, LookupError, AttributeError, ImportError)
 
 
+class BudgetExhausted(Exception):
+    """The run's shared budget is spent. Retrying cannot help."""
+
+
 def load_model() -> BaseChatModel:
     spec = os.environ.get("LLM_MODEL")
     if not spec:
@@ -19,6 +23,8 @@ def load_model() -> BaseChatModel:
 
 def is_transient(exc: Exception) -> bool:
     """Decide retries across providers, whose SDKs share no exception types."""
+    if isinstance(exc, BudgetExhausted):
+        return False
     if isinstance(exc, TimeoutError):
         return True
     status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
