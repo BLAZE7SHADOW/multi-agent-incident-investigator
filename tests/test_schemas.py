@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from investigator.schemas import LLM_OUTPUT_SCHEMAS, Hypothesis, Incident, Usage
+from investigator.schemas import LLM_OUTPUT_SCHEMAS, Incident, Usage
 
 NON_PORTABLE_KEYS = {"oneOf", "allOf", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"}
 
@@ -24,18 +24,10 @@ def test_llm_schemas_stay_portable(schema):
         assert not isinstance(node.get("additionalProperties"), dict)
 
 
-def test_hypothesis_score_is_clamped():
-    hypothesis = Hypothesis(
-        id="h1",
-        statement="s",
-        category="unknown",
-        component="c",
-        supporting=[],
-        contradicting=[],
-        assumptions=[],
-        score=1.7,
-    )
-    assert hypothesis.score == 1.0
+def test_no_llm_schema_can_self_report_a_score():
+    for schema in LLM_OUTPUT_SCHEMAS:
+        for node in _walk(schema.model_json_schema()):
+            assert not {"score", "confidence", "faithfulness"} & set(node.get("properties", {}))
 
 
 def test_usage_adds():

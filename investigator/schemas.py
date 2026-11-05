@@ -7,7 +7,7 @@ stay flat: no unions, free-form dicts or numeric bounds, which providers support
 from operator import add
 from typing import Annotated, Any, Literal, TypedDict
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 AgentName = Literal["observability", "dependency"]
 Source = Literal["logs", "metrics", "deployments", "dependencies", "history"]
@@ -23,10 +23,7 @@ CauseCategory = Literal[
 ]
 Confidence = Literal["low", "medium", "high"]
 Outcome = Literal["conclusive", "inconclusive"]
-
-
-def _clamp_unit(value: float) -> float:
-    return min(1.0, max(0.0, value))
+RowLabel = Literal["supports", "contradicts", "irrelevant"]
 
 
 class Limits(BaseModel):
@@ -125,11 +122,27 @@ class Hypothesis(BaseModel):
     supporting: list[str] = Field(description="Evidence IDs supporting this hypothesis")
     contradicting: list[str] = Field(description="Evidence IDs contradicting this hypothesis")
     assumptions: list[str]
-    score: Annotated[float, AfterValidator(_clamp_unit)] = Field(description="Between 0 and 1")
 
 
 class HypothesisSet(BaseModel):
     hypotheses: list[Hypothesis]
+
+
+class RowVerdict(BaseModel):
+    evidence_id: str
+    label: RowLabel = Field(
+        description="A row that shows only the symptom does not support a cause"
+    )
+    reason: str
+
+
+class HypothesisVerdict(BaseModel):
+    hypothesis_id: str
+    rows: list[RowVerdict]
+
+
+class Verification(BaseModel):
+    verdicts: list[HypothesisVerdict]
 
 
 class EvidenceRequest(BaseModel):
@@ -155,7 +168,7 @@ class ReportDraft(BaseModel):
     actions: list[Action]
 
 
-LLM_OUTPUT_SCHEMAS = (Finding, Plan, HypothesisSet, Critique, ReportDraft)
+LLM_OUTPUT_SCHEMAS = (Finding, Plan, HypothesisSet, Verification, Critique, ReportDraft)
 
 
 # --- Built by code, never by an LLM ---
@@ -168,7 +181,13 @@ class Task(TaskSpec):
 
 
 class RankedHypothesis(Hypothesis):
-    confidence: Confidence
+    """A hypothesis with everything an LLM must not decide, computed from Verifier labels."""
+
+    verified_supporting: list[str] = []
+    verified_contradicting: list[str] = []
+    faithfulness: float = 0.0
+    net_support: int = 0
+    confidence: Confidence = "low"
 
 
 class RecommendedAction(Action):
@@ -203,6 +222,7 @@ class InvestigationState(TypedDict, total=False):
     trace: Annotated[list[str], add]
     usage: Annotated[Usage, add]
     hypotheses: list[Hypothesis]
+    verification: Verification | None
     critique: Critique | None
     round: int
     stop_reason: str
