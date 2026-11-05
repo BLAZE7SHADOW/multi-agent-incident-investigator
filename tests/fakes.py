@@ -39,3 +39,28 @@ def reply(name: str, args: dict, input_tokens: int = 10, output_tokens: int = 5)
             "total_tokens": input_tokens + output_tokens,
         },
     )
+
+
+class RoutingChatModel(BaseChatModel):
+    """Replies per agent, chosen by its system prompt, so parallel agents stay deterministic."""
+
+    replies: dict[str, list[Any]]
+    calls: list[tuple[str, list[Any]]] = []
+    bound: list[list[str]] = []
+
+    @property
+    def _llm_type(self) -> str:
+        return "routing"
+
+    def bind_tools(self, tools, *, tool_choice=None, **kwargs):
+        self.bound.append([getattr(tool, "name", str(tool)) for tool in tools])
+        return self
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
+        system = str(messages[0].content)
+        agent = next(name for name in self.replies if f"the {name} agent" in system)
+        self.calls.append((agent, list(messages)))
+        item = self.replies[agent].pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return ChatResult(generations=[ChatGeneration(message=item)])

@@ -1,7 +1,6 @@
 import pytest
 from fakes import ScriptedChatModel, reply
 from langchain.agents import create_agent
-from langchain.chat_models import init_chat_model
 
 from investigator.llm import is_transient, load_model, model_retry
 from investigator.schemas import Plan
@@ -72,11 +71,23 @@ def test_is_transient(exc, expected):
 
 
 def test_load_model_requires_env(monkeypatch):
-    monkeypatch.delenv("LLM_MODEL", raising=False)
-    with pytest.raises(RuntimeError, match="LLM_MODEL"):
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    monkeypatch.delenv("AI_MODEL", raising=False)
+    with pytest.raises(RuntimeError, match="AI_PROVIDER"):
         load_model()
 
 
-def test_model_spec_selects_provider_without_a_network_call(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    assert type(init_chat_model("anthropic:claude-sonnet-5-5")).__name__ == "ChatAnthropic"
+@pytest.mark.parametrize(
+    ("provider", "model", "key", "client"),
+    [
+        ("gemini", "gemini-3.6-flash", "GEMINI_API_KEY", "ChatGoogleGenerativeAI"),
+        ("anthropic", "claude-sonnet-5-5", "ANTHROPIC_API_KEY", "ChatAnthropic"),
+    ],
+)
+def test_provider_is_chosen_by_env_without_a_network_call(
+    monkeypatch, provider, model, key, client
+):
+    monkeypatch.setenv("AI_PROVIDER", provider)
+    monkeypatch.setenv("AI_MODEL", model)
+    monkeypatch.setenv(key, "test-key")
+    assert type(load_model()).__name__ == client

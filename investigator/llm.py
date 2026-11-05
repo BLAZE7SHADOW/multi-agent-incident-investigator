@@ -6,6 +6,7 @@ from langchain.agents.middleware import ModelRetryMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models.chat_models import BaseChatModel
 
+_PROVIDERS = {"gemini": "google_genai"}
 _PERMANENT_STATUS = {400, 401, 403, 404, 422}
 _PROGRAMMING_ERRORS = (ValueError, TypeError, LookupError, AttributeError, ImportError)
 
@@ -15,10 +16,11 @@ class BudgetExhausted(Exception):
 
 
 def load_model() -> BaseChatModel:
-    spec = os.environ.get("LLM_MODEL")
-    if not spec:
-        raise RuntimeError("LLM_MODEL is not set; expected <provider>:<model>, see .env.example")
-    return init_chat_model(spec)
+    provider = os.environ.get("AI_PROVIDER")
+    model = os.environ.get("AI_MODEL")
+    if not provider or not model:
+        raise RuntimeError("Set AI_PROVIDER and AI_MODEL, see .env.example")
+    return init_chat_model(f"{_PROVIDERS.get(provider, provider)}:{model}")
 
 
 def is_transient(exc: Exception) -> bool:
