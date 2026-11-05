@@ -1,0 +1,1168 @@
+# Blind holdout set: fictional digital bank 'Kestrel Bank'. Written without access to the system under test.
+topology:
+- {id: t-01, service: mobile-gateway, depends_on: auth}
+- {id: t-02, service: mobile-gateway, depends_on: accounts}
+- {id: t-03, service: mobile-gateway, depends_on: payments}
+- {id: t-04, service: mobile-gateway, depends_on: cards}
+- {id: t-05, service: mobile-gateway, depends_on: statements}
+- {id: t-06, service: payments, depends_on: ledger}
+- {id: t-07, service: payments, depends_on: fraud-scoring}
+- {id: t-08, service: payments, depends_on: notifications}
+- {id: t-09, service: cards, depends_on: cardnet}
+- {id: t-10, service: cards, depends_on: fraud-scoring}
+- {id: t-11, service: cards, depends_on: ledger}
+- {id: t-12, service: accounts, depends_on: ledger}
+- {id: t-13, service: accounts, depends_on: kyc}
+- {id: t-14, service: kyc, depends_on: idverify}
+- {id: t-15, service: statements, depends_on: ledger}
+- {id: t-16, service: auth, depends_on: notifications}
+cases:
+- incident: {id: BLIND-01, title: Transfers failing with server errors in mobile app, description: 'Customers report ''Something went wrong'' when sending money. Gateway shows elevated 5xx on POST /v2/transfers since around 09:05.', service: mobile-gateway, reported_at: 2026-07-14T09:30}
+  scenario: A payments release with a new FX rounding policy throws NullPointerException on every transfer; straightforward deploy regression.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [clean]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-07-14T08:36, service: payments, level: WARN, msg: duplicate submit suppressed by idempotency key}
+    - {id: log-02, ts: 2026-07-14T08:38, service: mobile-gateway, level: INFO, msg: access log rotated file=access-8935.log}
+    - {id: log-03, ts: 2026-07-14T08:49, service: auth, level: INFO, msg: jwks cache refreshed keys=3}
+    - {id: log-04, ts: 2026-07-14T08:54, service: ledger, level: INFO, msg: checkpoint complete wrote 8459 buffers}
+    - {id: log-05, ts: 2026-07-14T08:57, service: auth, level: WARN, msg: login attempt for unknown username (rate within baseline)}
+    - {id: log-06, ts: 2026-07-14T08:59, service: ledger, level: INFO, msg: nightly balance snapshot job heartbeat}
+    - {id: log-07, ts: 2026-07-14T09:01, service: auth, level: INFO, msg: issued access token ttl=900s client=ios}
+    - {id: log-08, ts: 2026-07-14T09:02, service: payments, level: INFO, msg: pod payments-7f9c-2 ready version=v4.19.0}
+    - {id: log-09, ts: 2026-07-14T09:04, service: payments, level: ERROR, msg: 'NullPointerException at FxRoundingPolicy.apply(FxRoundingPolicy.java:88) transfer_id=tr_88121 currency=EUR'}
+    - {id: log-10, ts: 2026-07-14T09:05, service: mobile-gateway, level: WARN, msg: upstream payments returned 500 for POST /v2/transfers}
+    - {id: log-11, ts: 2026-07-14T09:07, service: payments, level: ERROR, msg: 'NullPointerException at FxRoundingPolicy.apply(FxRoundingPolicy.java:88) transfer_id=tr_88175 currency=GBP'}
+    - {id: log-12, ts: 2026-07-14T09:11, service: ledger, level: INFO, msg: nightly balance snapshot job heartbeat}
+    - {id: log-13, ts: 2026-07-14T09:12, service: payments, level: ERROR, msg: 'unhandled exception in TransferController.create: NullPointerException (FxRoundingPolicy) version=v4.19.0'}
+    - {id: log-14, ts: 2026-07-14T09:12, service: ledger, level: INFO, msg: checkpoint complete wrote 4430 buffers}
+    - {id: log-15, ts: 2026-07-14T09:13, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-16, ts: 2026-07-14T09:18, service: mobile-gateway, level: WARN, msg: upstream payments returned 500 for POST /v2/transfers (count=412 in last 5m)}
+    - {id: log-17, ts: 2026-07-14T09:21, service: ledger, level: INFO, msg: postings committed batch=500 duration=39ms}
+    - {id: log-18, ts: 2026-07-14T09:21, service: auth, level: INFO, msg: refresh token rotated client=android}
+    - {id: log-19, ts: 2026-07-14T09:21, service: mobile-gateway, level: INFO, msg: GET /v2/accounts/summary 200 41ms}
+    metrics:
+    - {id: met-01, service: payments, metric: http_5xx_ratio, region: us-east, start: 2026-07-14T08:40, step_min: 5, values: [0.002, 0.001, 0.002, 0.002, 0.003, 0.181, 0.207, 0.219, 0.204, 0.211, 0.216]}
+    - {id: met-02, service: mobile-gateway, metric: upstream_error_rate, region: us-east, start: 2026-07-14T08:40, step_min: 5, values: [0.001, 0.001, 0.001, 0.002, 0.002, 0.094, 0.11, 0.112, 0.108, 0.109, 0.111]}
+    - {id: met-03, service: ledger, metric: write_latency_p99_ms, region: us-east, start: 2026-07-14T08:40, step_min: 5, values: [44, 41, 46, 43, 45, 38, 36, 37, 39, 38, 40]}
+    deployments:
+    - {id: dep-01, ts: 2026-07-13T16:10, service: notifications, kind: deploy, detail: 'v2.3.0 -> v2.3.1: push payload localisation fixes'}
+    - {id: dep-02, ts: 2026-07-14T09:02, service: payments, kind: deploy, detail: 'v4.18.0 -> v4.19.0: new FX rounding policy for multi-currency transfers'}
+    history:
+    - {id: his-01, summary: 2026-05-02 payments 500s on transfers after v4.12.0; null currency code on legacy accounts; resolved by rollback}
+    - {id: his-02, summary: 2026-04-18 statements PDF rendering slow due to font cache eviction; resolved by cache resize}
+    faults: []
+  truth:
+    outcome: conclusive
+    category: bad_deploy
+    component: payments
+    key_evidence: [dep-02, log-09, met-01]
+- incident: {id: BLIND-02, title: Spike in declined transfers, description: 'Support is flooded with complaints that ordinary transfers are being declined. Decline ratio jumped around 13:55. A payments release went out shortly before.', service: payments, reported_at: 2026-07-21T14:20}
+  scenario: A fraud-scoring rules config lowered the block threshold right after an unrelated payments deploy; the deploy is the closer-looking suspect.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [noisy_logs, misleading_timing, multiple_changes]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-07-21T13:17, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-02, ts: 2026-07-21T13:18, service: payments, level: INFO, msg: standing orders scheduler tick processed=420}
+    - {id: log-03, ts: 2026-07-21T13:20, service: mobile-gateway, level: INFO, msg: POST /v2/transfers 201 118ms}
+    - {id: log-04, ts: 2026-07-21T13:21, service: mobile-gateway, level: INFO, msg: POST /v2/transfers 201 118ms}
+    - {id: log-05, ts: 2026-07-21T13:22, service: fraud-scoring, level: INFO, msg: feature snapshot loaded rows=1.2M}
+    - {id: log-06, ts: 2026-07-21T13:22, service: fraud-scoring, level: INFO, msg: score computed model=gbm-2026-06 latency=14ms}
+    - {id: log-07, ts: 2026-07-21T13:27, service: mobile-gateway, level: INFO, msg: health probe /healthz ok}
+    - {id: log-08, ts: 2026-07-21T13:27, service: mobile-gateway, level: INFO, msg: access log rotated file=access-6552.log}
+    - {id: log-09, ts: 2026-07-21T13:33, service: mobile-gateway, level: INFO, msg: GET /v2/accounts/summary 200 41ms}
+    - {id: log-10, ts: 2026-07-21T13:37, service: notifications, level: WARN, msg: push token invalid; removing token for device}
+    - {id: log-11, ts: 2026-07-21T13:39, service: payments, level: WARN, msg: duplicate submit suppressed by idempotency key}
+    - {id: log-12, ts: 2026-07-21T13:39, service: fraud-scoring, level: INFO, msg: feature snapshot loaded rows=1.2M}
+    - {id: log-13, ts: 2026-07-21T13:51, service: payments, level: INFO, msg: structured logging schema v2 enabled (field transfer_id)}
+    - {id: log-14, ts: 2026-07-21T13:52, service: fraud-scoring, level: INFO, msg: rules reloaded from config revision r1042 block_threshold=0.35 review_threshold=0.30}
+    - {id: log-15, ts: 2026-07-21T13:54, service: payments, level: WARN, msg: 'transfer tr_51120 declined: fraud_block score=0.41 threshold=0.35'}
+    - {id: log-16, ts: 2026-07-21T13:55, service: payments, level: WARN, msg: 'transfer tr_51138 declined: fraud_block score=0.38 threshold=0.35'}
+    - {id: log-17, ts: 2026-07-21T13:55, service: payments, level: INFO, msg: idempotency cache hit ratio=0.97}
+    - {id: log-18, ts: 2026-07-21T13:57, service: fraud-scoring, level: WARN, msg: block rate 31.2% over last 5m exceeds alert level 5%}
+    - {id: log-19, ts: 2026-07-21T13:57, service: fraud-scoring, level: INFO, msg: score computed model=gbm-2026-06 latency=14ms}
+    - {id: log-20, ts: 2026-07-21T13:57, service: notifications, level: INFO, msg: email batch sent count=6187}
+    - {id: log-21, ts: 2026-07-21T13:58, service: payments, level: WARN, msg: 'transfer tr_51190 declined: fraud_block score=0.52 threshold=0.35'}
+    - {id: log-22, ts: 2026-07-21T13:58, service: payments, level: INFO, msg: FX rates refreshed source=ecb pairs=42}
+    - {id: log-23, ts: 2026-07-21T13:59, service: notifications, level: INFO, msg: email batch sent count=7483}
+    - {id: log-24, ts: 2026-07-21T14:01, service: notifications, level: INFO, msg: push sent template=transfer_declined batch=200}
+    - {id: log-25, ts: 2026-07-21T14:03, service: fraud-scoring, level: INFO, msg: rules engine heartbeat ok}
+    - {id: log-26, ts: 2026-07-21T14:04, service: payments, level: WARN, msg: 'transfer tr_51302 declined: fraud_block score=0.36 threshold=0.35'}
+    - {id: log-27, ts: 2026-07-21T14:08, service: fraud-scoring, level: INFO, msg: feature snapshot loaded rows=1.2M}
+    - {id: log-28, ts: 2026-07-21T14:09, service: notifications, level: INFO, msg: push sent template=transfer_declined batch=200}
+    - {id: log-29, ts: 2026-07-21T14:09, service: payments, level: INFO, msg: transfer accepted id=tr_5764 amount_band=B2}
+    - {id: log-30, ts: 2026-07-21T14:15, service: payments, level: INFO, msg: FX rates refreshed source=ecb pairs=42}
+    - {id: log-31, ts: 2026-07-21T14:15, service: fraud-scoring, level: INFO, msg: score computed model=gbm-2026-06 latency=14ms}
+    - {id: log-32, ts: 2026-07-21T14:17, service: notifications, level: INFO, msg: email batch sent count=5682}
+    - {id: log-33, ts: 2026-07-21T14:18, service: payments, level: INFO, msg: transfer accepted id=tr_1724 amount_band=B2}
+    metrics:
+    - {id: met-01, service: payments, metric: transfer_decline_ratio, region: global, start: 2026-07-21T13:20, step_min: 5, values: [0.011, 0.012, 0.01, 0.011, 0.012, 0.011, 0.012, 0.334, 0.341, 0.338, 0.329, 0.336]}
+    - {id: met-02, service: fraud-scoring, metric: fraud_block_rate, region: global, start: 2026-07-21T13:20, step_min: 5, values: [0.009, 0.01, 0.009, 0.01, 0.011, 0.01, 0.01, 0.312, 0.319, 0.317, 0.309, 0.315]}
+    - {id: met-03, service: payments, metric: http_5xx_ratio, region: global, start: 2026-07-21T13:20, step_min: 5, values: [0.001, 0.001, 0.002, 0.001, 0.001, 0.001, 0.002, 0.001, 0.002, 0.001, 0.001, 0.002]}
+    - {id: met-04, service: fraud-scoring, metric: score_latency_p99_ms, region: global, start: 2026-07-21T13:20, step_min: 5, values: [31, 29, 33, 30, 32, 31, 30, 32, 31, 30, 33, 31]}
+    deployments:
+    - {id: dep-01, ts: 2026-07-21T11:15, service: statements, kind: deploy, detail: 'v3.4.2: paginate annual statement list'}
+    - {id: dep-02, ts: 2026-07-21T13:50, service: payments-api, kind: deploy, detail: 'v4.21.0: OpenAPI doc updates, rename structured log field txn -> transfer_id'}
+    - {id: dep-03, ts: 2026-07-21T13:52, service: fraud-scoring, kind: config, detail: 'fraud-rules.yaml: block_threshold 0.85 -> 0.35 (change FRD-311, marked ''staging tuning'')'}
+    history:
+    - {id: his-01, summary: 2026-03-09 fraud block spike after model retrain gbm-2026-03 overweighted new-payee feature; resolved by model rollback}
+    - {id: his-02, summary: 2026-06-02 payments declines due to ledger balance cache stale after failover}
+    faults: []
+  truth:
+    outcome: conclusive
+    category: config_change
+    component: fraud-scoring
+    key_evidence: [dep-03, log-14, log-15, met-02]
+    trap_component: payments
+- incident: {id: BLIND-03, title: 'Overnight transfer failures, ledger unavailable', description: 'Night on-call paged at 03:20: all transfers failing with ''ledger unavailable''. A ledger-core deploy went out at 03:05.', service: payments, reported_at: 2026-07-29T04:05}
+  scenario: Ledger WAL disk filled up over hours because archiving silently failed; a harmless ledger deploy minutes before the crash and a past bad-migration incident point at a deploy.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [misleading_history, misleading_timing]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-07-29T00:28, service: payments, level: INFO, msg: idempotency cache hit ratio=0.97}
+    - {id: log-02, ts: 2026-07-29T00:42, service: payments, level: INFO, msg: idempotency cache hit ratio=0.97}
+    - {id: log-03, ts: 2026-07-29T00:48, service: ledger, level: INFO, msg: postings committed batch=500 duration=41ms}
+    - {id: log-04, ts: 2026-07-29T00:57, service: statements, level: WARN, msg: statement render used fallback font for glyph U+20B9}
+    - {id: log-05, ts: 2026-07-29T01:14, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-06, ts: 2026-07-29T01:24, service: ledger, level: INFO, msg: postings committed batch=500 duration=41ms}
+    - {id: log-07, ts: 2026-07-29T01:30, service: ledger, level: WARN, msg: volume /var/lib/ledger/wal usage 90% (threshold 85%)}
+    - {id: log-08, ts: 2026-07-29T01:39, service: payments, level: INFO, msg: FX rates refreshed source=ecb pairs=42}
+    - {id: log-09, ts: 2026-07-29T01:52, service: ledger, level: WARN, msg: 'wal archiver: upload of segment 00000001000000A3000000F1 to archive bucket failed: AccessDenied; retaining segment (attempt 96)'}
+    - {id: log-10, ts: 2026-07-29T02:11, service: accounts, level: INFO, msg: address normalisation batch done records=1888}
+    - {id: log-11, ts: 2026-07-29T02:39, service: payments, level: WARN, msg: duplicate submit suppressed by idempotency key}
+    - {id: log-12, ts: 2026-07-29T02:41, service: ledger, level: WARN, msg: volume /var/lib/ledger/wal usage 97%}
+    - {id: log-13, ts: 2026-07-29T02:43, service: accounts, level: INFO, msg: account limits cache refreshed entries=88120}
+    - {id: log-14, ts: 2026-07-29T02:47, service: accounts, level: INFO, msg: account limits cache refreshed entries=88120}
+    - {id: log-15, ts: 2026-07-29T02:55, service: payments, level: INFO, msg: FX rates refreshed source=ecb pairs=42}
+    - {id: log-16, ts: 2026-07-29T03:05, service: ledger, level: INFO, msg: ledger-core v9.1.4 started (metrics library bump)}
+    - {id: log-17, ts: 2026-07-29T03:12, service: ledger, level: ERROR, msg: 'could not write to WAL segment 00000001000000A400000012: No space left on device'}
+    - {id: log-18, ts: 2026-07-29T03:12, service: ledger, level: ERROR, msg: database system is shut down; refusing new connections}
+    - {id: log-19, ts: 2026-07-29T03:13, service: payments, level: ERROR, msg: 'ledger post failed: 503 ledger unavailable transfer_id=tr_70011'}
+    - {id: log-20, ts: 2026-07-29T03:14, service: mobile-gateway, level: INFO, msg: health probe /healthz ok}
+    - {id: log-21, ts: 2026-07-29T03:15, service: statements, level: ERROR, msg: 'balance read failed: ledger unavailable'}
+    - {id: log-22, ts: 2026-07-29T03:18, service: ledger, level: ERROR, msg: 'could not write to WAL segment 00000001000000A400000012: No space left on device'}
+    - {id: log-23, ts: 2026-07-29T03:18, service: mobile-gateway, level: INFO, msg: access log rotated file=access-4713.log}
+    - {id: log-24, ts: 2026-07-29T03:24, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-25, ts: 2026-07-29T03:30, service: payments, level: ERROR, msg: 'ledger post failed: 503 ledger unavailable (count=2210 in last 15m)'}
+    - {id: log-26, ts: 2026-07-29T03:30, service: auth, level: WARN, msg: login attempt for unknown username (rate within baseline)}
+    metrics:
+    - {id: met-01, service: ledger, metric: wal_volume_used_pct, region: eu-west, start: 2026-07-29T00:00, step_min: 30, values: [62, 68, 74, 80, 86, 92, 98, 100, 100]}
+    - {id: met-02, service: ledger, metric: wal_archive_failures_total, region: eu-west, start: 2026-07-29T00:00, step_min: 30, values: [0, 24, 51, 78, 104, 131, 157, 183, 183]}
+    - {id: met-03, service: payments, metric: ledger_call_error_ratio, region: eu-west, start: 2026-07-29T02:30, step_min: 10, values: [0.0, 0.0, 0.001, 0.0, 0.0, 0.97, 1.0]}
+    deployments:
+    - {id: dep-01, ts: 2026-07-27T10:00, service: ledger-core, kind: config, detail: rotate archive bucket IAM credentials (secret ledger-wal-archive)}
+    - {id: dep-02, ts: 2026-07-28T17:20, service: accounts, kind: deploy, detail: 'v6.3.1: copy changes on limits screen'}
+    - {id: dep-03, ts: 2026-07-29T03:05, service: ledger-core, kind: deploy, detail: 'v9.1.3 -> v9.1.4: bump prometheus client library'}
+    history:
+    - {id: his-01, summary: '2026-04-14 ledger outage: migration in ledger-core v8.9 locked postings table; resolved by rollback'}
+    - {id: his-02, summary: 2026-02-20 payments failures caused by ledger primary failover taking 6 minutes}
+    faults: []
+  truth:
+    outcome: conclusive
+    category: resource_exhaustion
+    component: ledger
+    key_evidence: [met-01, log-07, log-17]
+    trap_component: payments
+- incident: {id: BLIND-04, title: Card payments being declined at merchants, description: 'Customers report card payments failing in shops since about 18:40. A cards deploy happened at 18:30.', service: cards, reported_at: 2026-08-03T19:15}
+  scenario: The card network vendor returned 503s; a cards deploy ten minutes earlier worked fine in between and is a timing red herring.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [misleading_timing, noisy_logs]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-08-03T18:00, service: fraud-scoring, level: WARN, msg: feature 'device_age_days' missing for 0.8% of requests; imputing}
+    - {id: log-02, ts: 2026-08-03T18:02, service: fraud-scoring, level: WARN, msg: feature 'device_age_days' missing for 0.8% of requests; imputing}
+    - {id: log-03, ts: 2026-08-03T18:02, service: mobile-gateway, level: INFO, msg: POST /v2/transfers 201 118ms}
+    - {id: log-04, ts: 2026-08-03T18:07, service: fraud-scoring, level: INFO, msg: score computed model=gbm-2026-06 latency=14ms}
+    - {id: log-05, ts: 2026-08-03T18:09, service: ledger, level: INFO, msg: checkpoint complete wrote 5552 buffers}
+    - {id: log-06, ts: 2026-08-03T18:11, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-07, ts: 2026-08-03T18:19, service: cards, level: INFO, msg: tokenization key cache refreshed}
+    - {id: log-08, ts: 2026-08-03T18:23, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-09, ts: 2026-08-03T18:23, service: cards, level: INFO, msg: authorize approved pan_token=tk_3917 mcc=5411}
+    - {id: log-10, ts: 2026-08-03T18:31, service: cards, level: INFO, msg: receipt payload now includes mcc (build v3.6.2)}
+    - {id: log-11, ts: 2026-08-03T18:33, service: cards, level: INFO, msg: authorize approved pan_token=tk_4471 mcc=5812 build=v3.6.2}
+    - {id: log-12, ts: 2026-08-03T18:37, service: cards, level: INFO, msg: authorize approved pan_token=tk_9012 mcc=4111 build=v3.6.2}
+    - {id: log-13, ts: 2026-08-03T18:40, service: ledger, level: INFO, msg: postings committed batch=500 duration=41ms}
+    - {id: log-14, ts: 2026-08-03T18:41, service: cards, level: ERROR, msg: 'cardnet authorize call failed: HTTP 503 Service Unavailable endpoint=auth.cardnet.example/v4/authorize after 3 retries'}
+    - {id: log-15, ts: 2026-08-03T18:42, service: cards, level: WARN, msg: circuit breaker 'cardnet-authorize' OPEN (error rate 62%)}
+    - {id: log-16, ts: 2026-08-03T18:42, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-17, ts: 2026-08-03T18:44, service: cards, level: ERROR, msg: 'cardnet authorize call failed: HTTP 503 Service Unavailable after 3 retries'}
+    - {id: log-18, ts: 2026-08-03T18:47, service: mobile-gateway, level: WARN, msg: upstream cards returned 502 for POST /v2/cards/authorize}
+    - {id: log-19, ts: 2026-08-03T18:48, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-20, ts: 2026-08-03T18:48, service: ledger, level: INFO, msg: checkpoint complete wrote 2547 buffers}
+    - {id: log-21, ts: 2026-08-03T18:50, service: mobile-gateway, level: INFO, msg: access log rotated file=access-5587.log}
+    - {id: log-22, ts: 2026-08-03T18:50, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-23, ts: 2026-08-03T18:51, service: notifications, level: INFO, msg: email batch sent count=1187}
+    - {id: log-24, ts: 2026-08-03T18:52, service: cards, level: INFO, msg: 'cardnet status feed: ''Investigating elevated errors on Authorization API'' posted 18:40'}
+    - {id: log-25, ts: 2026-08-03T18:52, service: notifications, level: INFO, msg: template cache warm templates=86}
+    - {id: log-26, ts: 2026-08-03T18:52, service: fraud-scoring, level: WARN, msg: feature 'device_age_days' missing for 0.8% of requests; imputing}
+    - {id: log-27, ts: 2026-08-03T18:53, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-28, ts: 2026-08-03T18:58, service: cards, level: ERROR, msg: 'cardnet authorize call failed: HTTP 503 Service Unavailable after 3 retries'}
+    - {id: log-29, ts: 2026-08-03T19:02, service: mobile-gateway, level: INFO, msg: access log rotated file=access-9839.log}
+    - {id: log-30, ts: 2026-08-03T19:03, service: cards, level: WARN, msg: 'circuit breaker ''cardnet-authorize'' HALF_OPEN probe failed: 503'}
+    - {id: log-31, ts: 2026-08-03T19:05, service: auth, level: INFO, msg: jwks cache refreshed keys=3}
+    metrics:
+    - {id: met-01, service: cards, metric: card_auth_success_ratio, region: global, start: 2026-08-03T18:00, step_min: 5, values: [0.981, 0.979, 0.982, 0.98, 0.981, 0.979, 0.983, 0.98, 0.98, 0.412, 0.389, 0.401, 0.395, 0.402, 0.398]}
+    - {id: met-02, service: cards, metric: cardnet_upstream_5xx_ratio, region: global, start: 2026-08-03T18:00, step_min: 5, values: [0.001, 0.0, 0.001, 0.001, 0.0, 0.001, 0.001, 0.0, 0.002, 0.588, 0.61, 0.597, 0.602, 0.6, 0.604]}
+    - {id: met-03, service: cards, metric: cpu_util_pct, region: global, start: 2026-08-03T18:00, step_min: 5, values: [38, 41, 39, 40, 37, 42, 40, 39, 41, 30, 29, 31, 30, 28, 30]}
+    deployments:
+    - {id: dep-01, ts: 2026-08-02T11:00, service: fraud-scoring, kind: deploy, detail: 'v7.2.4: feature snapshot loader retries'}
+    - {id: dep-02, ts: 2026-08-03T18:30, service: cards, kind: deploy, detail: 'v3.6.1 -> v3.6.2: add merchant category code to receipt payload'}
+    history:
+    - {id: his-01, summary: 2026-01-19 card authorizations failing after cards v3.1.0 deploy broke ISO8583 field mapping; resolved by rollback}
+    - {id: his-02, summary: 2026-05-07 notifications push delays due to APNs certificate rotation}
+    faults: []
+  truth:
+    outcome: conclusive
+    category: dependency_failure
+    component: cardnet
+    key_evidence: [log-14, log-24, met-02]
+    trap_component: cards
+- incident: {id: BLIND-05, title: All ledger-dependent calls failing after midnight, description: 'From 00:00 every transfer, balance and statement call fails. Clients see TLS handshake errors calling the ledger.', service: payments, reported_at: 2026-08-09T00:25}
+  scenario: The ledger's internal serving certificate expired at midnight; warning was logged the day before.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [clean]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-08-08T09:00, service: ledger, level: WARN, msg: 'cert-watch: serving certificate CN=ledger.internal expires in 14h59m (notAfter 2026-08-08T23:59:59Z); renewal not yet issued'}
+    - {id: log-02, ts: 2026-08-08T23:34, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-03, ts: 2026-08-08T23:38, service: payments, level: INFO, msg: idempotency cache hit ratio=0.97}
+    - {id: log-04, ts: 2026-08-08T23:44, service: statements, level: INFO, msg: statement pdf rendered pages=3 duration=640ms}
+    - {id: log-05, ts: 2026-08-08T23:44, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-06, ts: 2026-08-08T23:56, service: accounts, level: INFO, msg: 'GET /v1/accounts/{id}/summary 200 33ms'}
+    - {id: log-07, ts: 2026-08-09T00:00, service: payments, level: ERROR, msg: 'POST https://ledger.internal:8443/v1/postings failed: x509: certificate has expired or is not yet valid: current time 2026-08-09T00:00:12Z is after 2026-08-08T23:59:59Z'}
+    - {id: log-08, ts: 2026-08-09T00:01, service: statements, level: ERROR, msg: 'GET https://ledger.internal:8443/v1/balances failed: x509: certificate has expired or is not yet valid'}
+    - {id: log-09, ts: 2026-08-09T00:01, service: accounts, level: ERROR, msg: 'ledger client: tls handshake failed: x509: certificate has expired (CN=ledger.internal)'}
+    - {id: log-10, ts: 2026-08-09T00:04, service: ledger, level: INFO, msg: postings committed batch=0 duration=0ms (no inbound traffic)}
+    - {id: log-11, ts: 2026-08-09T00:06, service: mobile-gateway, level: INFO, msg: GET /v2/accounts/summary 200 41ms}
+    - {id: log-12, ts: 2026-08-09T00:09, service: payments, level: ERROR, msg: 'POST https://ledger.internal:8443/v1/postings failed: x509: certificate has expired or is not yet valid'}
+    - {id: log-13, ts: 2026-08-09T00:12, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-14, ts: 2026-08-09T00:13, service: auth, level: INFO, msg: issued access token ttl=900s client=ios}
+    - {id: log-15, ts: 2026-08-09T00:17, service: notifications, level: INFO, msg: email batch sent count=2294}
+    metrics:
+    - {id: met-01, service: payments, metric: ledger_call_error_ratio, region: us-east, start: 2026-08-08T23:30, step_min: 5, values: [0.0, 0.001, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0]}
+    - {id: met-02, service: ledger, metric: inbound_requests_per_sec, region: us-east, start: 2026-08-08T23:30, step_min: 5, values: [410, 398, 402, 395, 388, 380, 0, 0, 0, 0, 0]}
+    deployments:
+    - {id: dep-01, ts: 2026-08-07T14:00, service: kyc, kind: deploy, detail: 'v1.9.0: support new national ID format'}
+    history:
+    - {id: his-01, summary: 2026-03-28 ledger latency spike due to autovacuum on postings}
+    faults: []
+  truth:
+    outcome: conclusive
+    category: expired_certificate
+    component: ledger
+    key_evidence: [log-01, log-07, met-01]
+- incident: {id: BLIND-06, title: App returning 'service busy' just after midnight, description: 'Shortly after midnight on the 1st, many users get ''service busy, try later'' when opening the app.', service: mobile-gateway, reported_at: 2026-09-01T00:20}
+  scenario: 'Payday midnight: salary credits and pushes drive a 6x request spike; gateway sheds load. No recent deploy despite a history entry about a gateway deploy.'
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [clean, misleading_history]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-08-31T23:32, service: payments, level: WARN, msg: duplicate submit suppressed by idempotency key}
+    - {id: log-02, ts: 2026-08-31T23:34, service: payments, level: WARN, msg: duplicate submit suppressed by idempotency key}
+    - {id: log-03, ts: 2026-08-31T23:35, service: payments, level: WARN, msg: duplicate submit suppressed by idempotency key}
+    - {id: log-04, ts: 2026-08-31T23:37, service: auth, level: INFO, msg: jwks cache refreshed keys=3}
+    - {id: log-05, ts: 2026-08-31T23:47, service: payments, level: WARN, msg: duplicate submit suppressed by idempotency key}
+    - {id: log-06, ts: 2026-08-31T23:51, service: accounts, level: WARN, msg: slow query 612ms on reporting replica (threshold 500ms) query=monthly_spend_rollup}
+    - {id: log-07, ts: 2026-09-01T00:00, service: payments, level: INFO, msg: payroll credit batch received from partner bank count=412880}
+    - {id: log-08, ts: 2026-09-01T00:01, service: notifications, level: INFO, msg: push sent template=salary_received batch=5000}
+    - {id: log-09, ts: 2026-09-01T00:03, service: mobile-gateway, level: WARN, msg: requests_per_sec 9840 exceeds provisioned capacity 6000}
+    - {id: log-10, ts: 2026-09-01T00:04, service: mobile-gateway, level: INFO, msg: 'autoscaler: scale-up requested 24 -> 40 replicas; 16 pending node capacity'}
+    - {id: log-11, ts: 2026-09-01T00:05, service: mobile-gateway, level: WARN, msg: 'load shedding active: rejecting 22% of requests with 503 (cpu 97%)'}
+    - {id: log-12, ts: 2026-09-01T00:07, service: payments, level: INFO, msg: idempotency cache hit ratio=0.97}
+    - {id: log-13, ts: 2026-09-01T00:08, service: accounts, level: INFO, msg: 'GET /v1/accounts/{id}/summary 200 58ms'}
+    - {id: log-14, ts: 2026-09-01T00:10, service: mobile-gateway, level: WARN, msg: 'load shedding active: rejecting 31% of requests with 503 (cpu 98%)'}
+    - {id: log-15, ts: 2026-09-01T00:14, service: auth, level: INFO, msg: issued access tokens 4.8x baseline rate}
+    - {id: log-16, ts: 2026-09-01T00:14, service: auth, level: INFO, msg: refresh token rotated client=android}
+    - {id: log-17, ts: 2026-09-01T00:15, service: accounts, level: WARN, msg: slow query 612ms on reporting replica (threshold 500ms) query=monthly_spend_rollup}
+    - {id: log-18, ts: 2026-09-01T00:16, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-19, ts: 2026-09-01T00:19, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    metrics:
+    - {id: met-01, service: mobile-gateway, metric: requests_per_sec, region: global, start: 2026-08-31T23:40, step_min: 5, values: [1820, 1790, 1760, 1810, 9840, 11200, 11650, 11420, 10980]}
+    - {id: met-02, service: mobile-gateway, metric: cpu_util_pct, region: global, start: 2026-08-31T23:40, step_min: 5, values: [31, 30, 29, 31, 96, 98, 98, 97, 97]}
+    - {id: met-03, service: mobile-gateway, metric: http_503_ratio, region: global, start: 2026-08-31T23:40, step_min: 5, values: [0.0, 0.0, 0.0, 0.0, 0.18, 0.29, 0.31, 0.3, 0.27]}
+    - {id: met-04, service: payments, metric: http_5xx_ratio, region: global, start: 2026-08-31T23:40, step_min: 5, values: [0.001, 0.001, 0.001, 0.002, 0.002, 0.003, 0.002, 0.002, 0.003]}
+    deployments:
+    - {id: dep-01, ts: 2026-08-28T15:30, service: mobile-gateway, kind: deploy, detail: 'v12.8.1: update TLS cipher list'}
+    history:
+    - {id: his-01, summary: 2025-12-03 gateway 503s after mobile-gateway v12.0 deploy introduced catastrophic regex in routing; resolved by rollback}
+    - {id: his-02, summary: 2026-07-10 accounts slow due to reporting replica lag}
+    faults: []
+  truth:
+    outcome: conclusive
+    category: traffic_surge
+    component: mobile-gateway
+    key_evidence: [met-01, met-02, met-03, log-11]
+- incident: {id: BLIND-07, title: 'Transfers failing, payments reporting ledger errors', description: 'Since ~10:40 most transfers fail. Payments logs show 500s from the ledger. Several changes went out this morning.', service: payments, reported_at: 2026-08-12T11:05}
+  scenario: A ledger-core release renamed a column before its migration ran; four changes landed within 15 minutes and the ledger is named differently across tools.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [multiple_changes, name_mismatch, cascading]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-08-12T10:07, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-02, ts: 2026-08-12T10:09, service: ledger, level: INFO, msg: nightly balance snapshot job heartbeat}
+    - {id: log-03, ts: 2026-08-12T10:12, service: notifications, level: INFO, msg: template cache warm templates=86}
+    - {id: log-04, ts: 2026-08-12T10:13, service: statements, level: INFO, msg: statement pdf rendered pages=3 duration=640ms}
+    - {id: log-05, ts: 2026-08-12T10:14, service: payments, level: WARN, msg: duplicate submit suppressed by idempotency key}
+    - {id: log-06, ts: 2026-08-12T10:26, service: payments, level: INFO, msg: idempotency cache hit ratio=0.97}
+    - {id: log-07, ts: 2026-08-12T10:26, service: payments, level: INFO, msg: FX rates refreshed source=ecb pairs=42}
+    - {id: log-08, ts: 2026-08-12T10:32, service: notifications, level: INFO, msg: push batching enabled batch_size=500 build=v2.8.0}
+    - {id: log-09, ts: 2026-08-12T10:35, service: statements, level: INFO, msg: font cache resized to 512 entries}
+    - {id: log-10, ts: 2026-08-12T10:39, service: ledger, level: ERROR, msg: 'INSERT INTO postings failed: column "posting_reference" of relation "postings" does not exist (build v9.2.1)'}
+    - {id: log-11, ts: 2026-08-12T10:40, service: payments, level: ERROR, msg: 'ledger post failed: 500 internal error transfer_id=tr_33019'}
+    - {id: log-12, ts: 2026-08-12T10:42, service: ledger, level: ERROR, msg: 'INSERT INTO postings failed: column "posting_reference" of relation "postings" does not exist'}
+    - {id: log-13, ts: 2026-08-12T10:42, service: notifications, level: INFO, msg: email batch sent count=5453}
+    - {id: log-14, ts: 2026-08-12T10:44, service: payments, level: WARN, msg: outbound transfer queue depth 3120 and rising}
+    - {id: log-15, ts: 2026-08-12T10:44, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-16, ts: 2026-08-12T10:46, service: mobile-gateway, level: INFO, msg: flag show_new_card_art evaluated for 10% of sessions}
+    - {id: log-17, ts: 2026-08-12T10:46, service: auth, level: WARN, msg: login attempt for unknown username (rate within baseline)}
+    - {id: log-18, ts: 2026-08-12T10:50, service: payments, level: ERROR, msg: 'ledger post failed: 500 internal error (count=1840 in last 10m)'}
+    - {id: log-19, ts: 2026-08-12T10:50, service: statements, level: INFO, msg: font cache hit ratio=0.99}
+    - {id: log-20, ts: 2026-08-12T10:52, service: ledger, level: INFO, msg: read queries healthy p99=12ms}
+    - {id: log-21, ts: 2026-08-12T10:58, service: notifications, level: WARN, msg: push token invalid; removing token for device}
+    - {id: log-22, ts: 2026-08-12T10:59, service: statements, level: WARN, msg: statement render used fallback font for glyph U+20B9}
+    metrics:
+    - {id: met-01, service: ledger, metric: posting_error_ratio, region: eu-west, start: 2026-08-12T10:15, step_min: 5, values: [0.0, 0.0, 0.0, 0.0, 0.0, 0.94, 0.96, 0.95, 0.96, 0.95]}
+    - {id: met-02, service: payments-svc, metric: transfer_failure_ratio, region: eu-west, start: 2026-08-12T10:15, step_min: 5, values: [0.004, 0.003, 0.004, 0.003, 0.004, 0.89, 0.91, 0.9, 0.9, 0.91]}
+    - {id: met-03, service: notifications, metric: push_send_error_ratio, region: eu-west, start: 2026-08-12T10:15, step_min: 5, values: [0.01, 0.01, 0.01, 0.012, 0.011, 0.012, 0.01, 0.011, 0.01, 0.012]}
+    deployments:
+    - {id: dep-01, ts: 2026-08-12T10:31, service: notify-svc, kind: deploy, detail: 'v2.8.0: batch push sends'}
+    - {id: dep-02, ts: 2026-08-12T10:34, service: statements, kind: config, detail: pdf renderer font_cache_size 256 -> 512}
+    - {id: dep-03, ts: 2026-08-12T10:38, service: ledger-core, kind: deploy, detail: 'v9.2.0 -> v9.2.1: rename column posting_ref -> posting_reference in ORM (migration 0412 scheduled separately)'}
+    - {id: dep-04, ts: 2026-08-12T10:45, service: mobile-gateway, kind: flag, detail: 'show_new_card_art: 0% -> 10%'}
+    history:
+    - {id: his-01, summary: 2026-06-02 payments declines due to ledger balance cache stale after failover}
+    faults: []
+  truth:
+    outcome: conclusive
+    category: bad_deploy
+    component: ledger
+    key_evidence: [dep-03, log-10, met-01]
+    trap_component: payments
+- incident: {id: BLIND-08, title: Spike in login failures (401) from the app, description: 'About a third of logins fail with 401 since roughly 08:15. Accounts has been slow this morning too.', service: mobile-gateway, reported_at: 2026-08-18T08:50}
+  scenario: A device-binding feature flag was ramped to 100% under a different service name, rejecting older app versions; accounts latency from a batch job is a concurrent distraction.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [name_mismatch, conflicting_signals]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-08-18T07:21, service: mobile-gateway, level: INFO, msg: access log rotated file=access-5425.log}
+    - {id: log-02, ts: 2026-08-18T07:27, service: accounts, level: INFO, msg: address normalisation batch done records=1739}
+    - {id: log-03, ts: 2026-08-18T07:34, service: auth, level: INFO, msg: session cleanup removed 4941 expired sessions}
+    - {id: log-04, ts: 2026-08-18T07:44, service: accounts, level: WARN, msg: 'p99 latency 1.9s on /v1/accounts/{id}/limits: nightly reconciliation job holding locks on account_limits'}
+    - {id: log-05, ts: 2026-08-18T07:53, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-06, ts: 2026-08-18T07:54, service: accounts, level: INFO, msg: 'GET /v1/accounts/{id}/summary 200 33ms'}
+    - {id: log-07, ts: 2026-08-18T08:01, service: accounts, level: INFO, msg: address normalisation batch done records=3889}
+    - {id: log-08, ts: 2026-08-18T08:02, service: accounts, level: WARN, msg: reconciliation job still running (78% complete)}
+    - {id: log-09, ts: 2026-08-18T08:12, service: auth, level: INFO, msg: 'flag enforce_device_binding now evaluates true for 100% of logins (rule: rollout)'}
+    - {id: log-10, ts: 2026-08-18T08:14, service: auth, level: WARN, msg: 'login rejected: device attestation missing client=android/5.9.2 user=u_1931'}
+    - {id: log-11, ts: 2026-08-18T08:15, service: auth, level: WARN, msg: 'login rejected: device attestation missing client=ios/5.8.0 user=u_7710'}
+    - {id: log-12, ts: 2026-08-18T08:17, service: mobile-gateway, level: WARN, msg: POST /v1/login 401 rate 38% (baseline 3%)}
+    - {id: log-13, ts: 2026-08-18T08:19, service: payments, level: INFO, msg: FX rates refreshed source=ecb pairs=42}
+    - {id: log-14, ts: 2026-08-18T08:20, service: mobile-gateway, level: WARN, msg: request from client ios/6.1.0 missing Accept-Language; defaulting en-GB}
+    - {id: log-15, ts: 2026-08-18T08:21, service: auth, level: WARN, msg: 'login rejected: device attestation missing client=android/5.7.4 user=u_2208'}
+    - {id: log-16, ts: 2026-08-18T08:24, service: mobile-gateway, level: INFO, msg: health probe /healthz ok}
+    - {id: log-17, ts: 2026-08-18T08:26, service: accounts, level: WARN, msg: 'p99 latency 1.7s on /v1/accounts/{id}/limits: reconciliation lock wait'}
+    - {id: log-18, ts: 2026-08-18T08:27, service: auth, level: INFO, msg: session cleanup removed 4075 expired sessions}
+    - {id: log-19, ts: 2026-08-18T08:29, service: auth, level: INFO, msg: session cleanup removed 7010 expired sessions}
+    - {id: log-20, ts: 2026-08-18T08:31, service: auth, level: INFO, msg: login accepted client=ios/6.1.0 attestation=ok}
+    - {id: log-21, ts: 2026-08-18T08:38, service: accounts, level: INFO, msg: reconciliation job finished duration=74m}
+    - {id: log-22, ts: 2026-08-18T08:41, service: payments, level: WARN, msg: duplicate submit suppressed by idempotency key}
+    metrics:
+    - {id: met-01, service: mobile-gateway, metric: http_401_ratio, region: global, start: 2026-08-18T07:30, step_min: 5, values: [0.031, 0.029, 0.03, 0.032, 0.03, 0.031, 0.031, 0.029, 0.03, 0.384, 0.391, 0.379, 0.388, 0.385, 0.39, 0.386]}
+    - {id: met-02, service: auth, metric: login_success_ratio, region: global, start: 2026-08-18T07:30, step_min: 5, values: [0.962, 0.958, 0.961, 0.96, 0.959, 0.962, 0.96, 0.961, 0.958, 0.598, 0.591, 0.603, 0.597, 0.6, 0.595, 0.599]}
+    - {id: met-03, service: accounts, metric: p99_latency_ms, region: global, start: 2026-08-18T07:30, step_min: 5, values: [410, 420, 1680, 1820, 1910, 1870, 1790, 1720, 1700, 1750, 1690, 1710, 1650, 1600, 430, 410]}
+    deployments:
+    - {id: dep-01, ts: 2026-08-18T07:30, service: accounts-svc, kind: deploy, detail: 'v6.4.0: show pending card holds on account summary'}
+    - {id: dep-02, ts: 2026-08-18T08:12, service: identity-auth, kind: flag, detail: 'enforce_device_binding: 5% -> 100%'}
+    history:
+    - {id: his-01, summary: 2026-04-30 login failures caused by accounts limits endpoint timeouts during reconciliation; job rescheduled}
+    faults: []
+  truth:
+    outcome: conclusive
+    category: config_change
+    component: auth
+    key_evidence: [dep-02, log-09, log-10, met-02]
+    trap_component: accounts
+- incident: {id: BLIND-09, title: Transfers timing out intermittently, description: 'Since ~16:05 transfers intermittently fail or time out. Payments p99 latency is up in waves.', service: payments, reported_at: 2026-08-24T16:55}
+  scenario: Fraud-scoring's unbounded merchant cache exhausts JVM heap after a large partner onboarding and pods OOM in a loop; payments shows the symptoms.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [noisy_logs, tool_partial, cascading]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-08-24T15:31, service: mobile-gateway, level: INFO, msg: access log rotated file=access-4639.log}
+    - {id: log-02, ts: 2026-08-24T15:32, service: ledger, level: INFO, msg: nightly balance snapshot job heartbeat}
+    - {id: log-03, ts: 2026-08-24T15:33, service: ledger, level: INFO, msg: checkpoint complete wrote 7659 buffers}
+    - {id: log-04, ts: 2026-08-24T15:43, service: cards, level: WARN, msg: merchant descriptor truncated to 22 chars}
+    - {id: log-05, ts: 2026-08-24T15:44, service: mobile-gateway, level: INFO, msg: health probe /healthz ok}
+    - {id: log-06, ts: 2026-08-24T15:45, service: cards, level: WARN, msg: merchant descriptor truncated to 22 chars}
+    - {id: log-07, ts: 2026-08-24T15:48, service: fraud-scoring, level: WARN, msg: merchant profile cache size=4.1M entries (no max configured)}
+    - {id: log-08, ts: 2026-08-24T15:49, service: cards, level: INFO, msg: settlement file chunk uploaded seq=6271}
+    - {id: log-09, ts: 2026-08-24T15:51, service: mobile-gateway, level: WARN, msg: request from client ios/6.1.0 missing Accept-Language; defaulting en-GB}
+    - {id: log-10, ts: 2026-08-24T15:53, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-11, ts: 2026-08-24T15:54, service: fraud-scoring, level: INFO, msg: rules engine heartbeat ok}
+    - {id: log-12, ts: 2026-08-24T15:55, service: mobile-gateway, level: INFO, msg: GET /v2/accounts/summary 200 41ms}
+    - {id: log-13, ts: 2026-08-24T15:57, service: cards, level: INFO, msg: settlement file chunk uploaded seq=8561}
+    - {id: log-14, ts: 2026-08-24T15:57, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-15, ts: 2026-08-24T16:02, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-16, ts: 2026-08-24T16:02, service: fraud-scoring, level: WARN, msg: 'GC overhead: 92% of time spent in GC over last 60s heap=7.8G/8G'}
+    - {id: log-17, ts: 2026-08-24T16:06, service: fraud-scoring, level: ERROR, msg: 'java.lang.OutOfMemoryError: Java heap space at MerchantProfileCache.put'}
+    - {id: log-18, ts: 2026-08-24T16:06, service: fraud-scoring, level: ERROR, msg: pod fraud-scoring-5d8b-x2 terminated reason=OOMKilled restarts=4}
+    - {id: log-19, ts: 2026-08-24T16:06, service: notifications, level: WARN, msg: push token invalid; removing token for device}
+    - {id: log-20, ts: 2026-08-24T16:07, service: payments, level: WARN, msg: fraud score call timed out after 800ms; applying fail-closed policy transfer_id=tr_62001}
+    - {id: log-21, ts: 2026-08-24T16:08, service: cards, level: WARN, msg: fraud score call timed out after 300ms; using fallback rules}
+    - {id: log-22, ts: 2026-08-24T16:10, service: auth, level: INFO, msg: jwks cache refreshed keys=3}
+    - {id: log-23, ts: 2026-08-24T16:14, service: ledger, level: INFO, msg: nightly balance snapshot job heartbeat}
+    - {id: log-24, ts: 2026-08-24T16:15, service: payments, level: ERROR, msg: 'transfer tr_62110 failed: fraud scoring unavailable'}
+    - {id: log-25, ts: 2026-08-24T16:18, service: cards, level: INFO, msg: authorize approved pan_token=tk_1800 mcc=5411}
+    - {id: log-26, ts: 2026-08-24T16:18, service: ledger, level: INFO, msg: nightly balance snapshot job heartbeat}
+    - {id: log-27, ts: 2026-08-24T16:19, service: payments, level: INFO, msg: standing orders scheduler tick processed=6207}
+    - {id: log-28, ts: 2026-08-24T16:19, service: ledger, level: INFO, msg: nightly balance snapshot job heartbeat}
+    - {id: log-29, ts: 2026-08-24T16:19, service: cards, level: INFO, msg: authorize approved pan_token=tk_456 mcc=5411}
+    - {id: log-30, ts: 2026-08-24T16:21, service: fraud-scoring, level: INFO, msg: pod fraud-scoring-5d8b-x2 started; warming merchant profile cache}
+    - {id: log-31, ts: 2026-08-24T16:23, service: cards, level: INFO, msg: authorize approved pan_token=tk_5545 mcc=5411}
+    - {id: log-32, ts: 2026-08-24T16:28, service: cards, level: WARN, msg: merchant descriptor truncated to 22 chars}
+    - {id: log-33, ts: 2026-08-24T16:30, service: auth, level: INFO, msg: jwks cache refreshed keys=3}
+    - {id: log-34, ts: 2026-08-24T16:31, service: fraud-scoring, level: ERROR, msg: pod fraud-scoring-5d8b-q7 terminated reason=OOMKilled restarts=5}
+    - {id: log-35, ts: 2026-08-24T16:31, service: notifications, level: INFO, msg: email batch sent count=3077}
+    - {id: log-36, ts: 2026-08-24T16:36, service: notifications, level: INFO, msg: template cache warm templates=86}
+    - {id: log-37, ts: 2026-08-24T16:37, service: payments, level: WARN, msg: duplicate submit suppressed by idempotency key}
+    metrics:
+    - {id: met-01, service: fraud-scoring, metric: jvm_heap_used_pct, region: us-east, start: 2026-08-24T15:20, step_min: 10, values: [71, 75, 79, 86, 93, 99, 64, 88, 98, 99]}
+    - {id: met-02, service: payments, metric: fraud_call_timeout_ratio, region: us-east, start: 2026-08-24T15:20, step_min: 10, values: [0.0, 0.001, 0.001, 0.004, 0.03, 0.41, 0.12, 0.08, 0.39, 0.44]}
+    - {id: met-03, service: payments, metric: p99_latency_ms, region: us-east, start: 2026-08-24T15:20, step_min: 10, values: [210, 205, 220, 260, 410, 980, 450, 380, 960, 990]}
+    deployments:
+    - {id: dep-01, ts: 2026-08-11T10:20, service: fraud-svc, kind: deploy, detail: 'v7.2.4 -> v7.2.5: dependency patch updates'}
+    - {id: dep-02, ts: 2026-08-23T09:00, service: accounts, kind: config, detail: onboard merchant partner 'Brightmart' (2.6M merchant profiles)}
+    history:
+    - {id: his-01, summary: 2026-02-11 payments timeouts after payments v4.6 deploy added synchronous audit write; resolved by rollback}
+    faults:
+    - {tool: query_metrics, kind: partial, times: 1, max_rows: 1}
+  truth:
+    outcome: conclusive
+    category: resource_exhaustion
+    component: fraud-scoring
+    key_evidence: [log-16, log-17, log-18, met-01]
+    trap_component: payments
+- incident: {id: BLIND-10, title: New account sign-ups failing in Europe, description: 'EU users cannot finish account opening since about 11:55; the app stalls on the identity check step.', service: accounts, reported_at: 2026-09-02T12:30}
+  scenario: The identity-verification vendor's EU endpoint is timing out; kyc and accounts only show downstream symptoms and US is healthy.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [cascading, regional, tool_timeout]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-09-02T11:42, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-02, ts: 2026-09-02T11:44, service: kyc, level: WARN, msg: selfie quality low; requesting retake}
+    - {id: log-03, ts: 2026-09-02T11:45, service: accounts, level: WARN, msg: slow query 612ms on reporting replica (threshold 500ms) query=monthly_spend_rollup}
+    - {id: log-04, ts: 2026-09-02T11:51, service: kyc, level: WARN, msg: selfie quality low; requesting retake}
+    - {id: log-05, ts: 2026-09-02T11:53, service: kyc, level: INFO, msg: document check accepted provider=idverify}
+    - {id: log-06, ts: 2026-09-02T11:54, service: mobile-gateway, level: INFO, msg: health probe /healthz ok}
+    - {id: log-07, ts: 2026-09-02T11:56, service: kyc, level: ERROR, msg: 'idverify POST https://eu.api.idverify.example/v2/checks timed out after 10000ms region=eu-west'}
+    - {id: log-08, ts: 2026-09-02T11:58, service: accounts, level: ERROR, msg: 'onboarding step kyc_check failed: upstream kyc 504 region=eu-west'}
+    - {id: log-09, ts: 2026-09-02T12:01, service: kyc, level: INFO, msg: 'idverify POST https://us.api.idverify.example/v2/checks 200 latency=310ms region=us-east'}
+    - {id: log-10, ts: 2026-09-02T12:02, service: kyc, level: WARN, msg: selfie quality low; requesting retake}
+    - {id: log-11, ts: 2026-09-02T12:03, service: kyc, level: ERROR, msg: 'idverify POST https://eu.api.idverify.example/v2/checks timed out after 10000ms region=eu-west'}
+    - {id: log-12, ts: 2026-09-02T12:07, service: kyc, level: WARN, msg: 'idverify eu-west: 0 of last 50 checks completed'}
+    - {id: log-13, ts: 2026-09-02T12:09, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-14, ts: 2026-09-02T12:10, service: accounts, level: ERROR, msg: 'onboarding step kyc_check failed: upstream kyc 504 region=eu-west (count=318)'}
+    - {id: log-15, ts: 2026-09-02T12:12, service: kyc, level: INFO, msg: document check accepted provider=idverify region=us-east}
+    - {id: log-16, ts: 2026-09-02T12:12, service: accounts, level: INFO, msg: address normalisation batch done records=4980}
+    - {id: log-17, ts: 2026-09-02T12:18, service: kyc, level: INFO, msg: sanctions list refreshed entries=12904}
+    - {id: log-18, ts: 2026-09-02T12:23, service: auth, level: INFO, msg: issued access token ttl=900s client=ios}
+    - {id: log-19, ts: 2026-09-02T12:23, service: accounts, level: INFO, msg: 'GET /v1/accounts/{id}/summary 200 33ms'}
+    metrics:
+    - {id: met-01, service: kyc, metric: idverify_latency_p99_ms, region: eu-west, start: 2026-09-02T11:30, step_min: 5, values: [620, 640, 610, 650, 630, 10000, 10000, 10000, 10000, 10000, 10000, 10000]}
+    - {id: met-02, service: kyc, metric: idverify_latency_p99_ms, region: us-east, start: 2026-09-02T11:30, step_min: 5, values: [580, 600, 590, 610, 595, 600, 605, 590, 600, 598, 602, 597]}
+    - {id: met-03, service: accounts, metric: signup_completion_ratio, region: eu-west, start: 2026-09-02T11:30, step_min: 5, values: [0.71, 0.7, 0.72, 0.71, 0.7, 0.12, 0.03, 0.02, 0.02, 0.03, 0.02, 0.02]}
+    - {id: met-04, service: kyc, metric: cpu_util_pct, region: eu-west, start: 2026-09-02T11:30, step_min: 5, values: [22, 24, 23, 21, 22, 18, 17, 17, 18, 17, 16, 17]}
+    deployments:
+    - {id: dep-01, ts: 2026-09-01T15:40, service: kyc, kind: deploy, detail: 'v1.9.3: retry document upload on 409'}
+    history:
+    - {id: his-01, summary: 2026-05-15 kyc onboarding failures after kyc v1.7 deploy mis-parsed passport MRZ; resolved by rollback}
+    faults:
+    - {tool: get_dependencies, kind: timeout, times: 2}
+  truth:
+    outcome: conclusive
+    category: dependency_failure
+    component: idverify
+    key_evidence: [log-07, met-01, met-02]
+    trap_component: kyc
+- incident: {id: BLIND-11, title: 'All card authorizations failing since 06:00', description: 'Every card payment is declined since 06:00. Earlier this year the card network had outages that looked similar.', service: cards, reported_at: 2026-09-07T07:10}
+  scenario: Kestrel's own mTLS client certificate for the card network expired after auto-renew was disabled; history of vendor outages and differently named cards service mislead.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [misleading_history, name_mismatch, tool_partial]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-09-06T06:00, service: card-processing, level: WARN, msg: 'client certificate CN=kestrel-cards-prod for cardnet mTLS expires in 24h (notAfter 2026-09-07T06:00:00Z); auto-renew job disabled since 2026-08-15 (CHG-7781)'}
+    - {id: log-02, ts: 2026-09-07T05:34, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-03, ts: 2026-09-07T05:35, service: fraud-scoring, level: INFO, msg: feature snapshot loaded rows=1.2M}
+    - {id: log-04, ts: 2026-09-07T05:38, service: card-processing, level: INFO, msg: settlement file chunk uploaded seq=4374}
+    - {id: log-05, ts: 2026-09-07T05:41, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-06, ts: 2026-09-07T05:44, service: ledger, level: INFO, msg: checkpoint complete wrote 1040 buffers}
+    - {id: log-07, ts: 2026-09-07T05:46, service: fraud-scoring, level: INFO, msg: score computed model=gbm-2026-06 latency=14ms}
+    - {id: log-08, ts: 2026-09-07T06:00, service: card-processing, level: ERROR, msg: 'TLS handshake with auth.cardnet.example:443 failed: remote error: tls: expired certificate (presented client cert CN=kestrel-cards-prod)'}
+    - {id: log-09, ts: 2026-09-07T06:02, service: card-processing, level: ERROR, msg: 'cardnet authorize failed: tls handshake error; declining with code 91'}
+    - {id: log-10, ts: 2026-09-07T06:05, service: card-processing, level: INFO, msg: 'cardnet status feed: all systems operational'}
+    - {id: log-11, ts: 2026-09-07T06:11, service: card-processing, level: ERROR, msg: 'TLS handshake with auth.cardnet.example:443 failed: remote error: tls: expired certificate'}
+    - {id: log-12, ts: 2026-09-07T06:13, service: fraud-scoring, level: INFO, msg: rules engine heartbeat ok}
+    - {id: log-13, ts: 2026-09-07T06:23, service: notifications, level: INFO, msg: email batch sent count=8822}
+    - {id: log-14, ts: 2026-09-07T06:24, service: mobile-gateway, level: WARN, msg: upstream cards returned 502 for POST /v2/cards/authorize}
+    - {id: log-15, ts: 2026-09-07T06:28, service: mobile-gateway, level: INFO, msg: access log rotated file=access-3622.log}
+    - {id: log-16, ts: 2026-09-07T06:33, service: fraud-scoring, level: INFO, msg: score computed model=gbm-2026-06 latency=14ms}
+    - {id: log-17, ts: 2026-09-07T06:39, service: mobile-gateway, level: WARN, msg: request from client ios/6.1.0 missing Accept-Language; defaulting en-GB}
+    - {id: log-18, ts: 2026-09-07T06:40, service: card-processing, level: ERROR, msg: 'TLS handshake with auth.cardnet.example:443 failed: remote error: tls: expired certificate (count=5120)'}
+    - {id: log-19, ts: 2026-09-07T06:57, service: mobile-gateway, level: INFO, msg: route table reloaded routes=212 checksum=ae19}
+    - {id: log-20, ts: 2026-09-07T07:02, service: mobile-gateway, level: WARN, msg: request from client ios/6.1.0 missing Accept-Language; defaulting en-GB}
+    metrics:
+    - {id: met-01, service: card-processing, metric: card_auth_success_ratio, region: global, start: 2026-09-07T05:30, step_min: 10, values: [0.979, 0.981, 0.98, 0.0, 0.0, 0.0, 0.0, 0.0]}
+    - {id: met-02, service: card-processing, metric: cardnet_tls_handshake_errors_per_min, region: global, start: 2026-09-07T05:30, step_min: 10, values: [0, 0, 0, 2840, 2910, 2870, 2900, 2880]}
+    deployments:
+    - {id: dep-01, ts: 2026-09-03T13:15, service: cards-svc, kind: deploy, detail: 'v3.6.4: settlement file retry'}
+    history:
+    - {id: his-01, summary: '2026-06-11 card authorization failures: cardnet vendor outage on authorization API; resolved by vendor after 70m'}
+    - {id: his-02, summary: '2026-02-27 card declines spike: cardnet returned 503s during their maintenance window'}
+    faults:
+    - {tool: query_logs, kind: partial, times: 1, max_rows: 3}
+  truth:
+    outcome: conclusive
+    category: expired_certificate
+    component: cards
+    key_evidence: [log-01, log-08, met-01]
+    trap_component: cardnet
+- incident: {id: BLIND-12, title: 'Account pages slow, ledger replica overloaded', description: 'Account summary pages load slowly since about 08:05. Ledger read replica CPU is near 100%.', service: accounts, reported_at: 2026-10-01T09:20}
+  scenario: A tax-statement campaign sent 2.1M users to download PDFs; the statements surge overloads the shared ledger replica so ledger looks like the culprit.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [cascading, conflicting_signals, tool_partial]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-10-01T07:34, service: mobile-gateway, level: INFO, msg: access log rotated file=access-9128.log}
+    - {id: log-02, ts: 2026-10-01T07:38, service: statements, level: WARN, msg: statement render used fallback font for glyph U+20B9}
+    - {id: log-03, ts: 2026-10-01T07:38, service: statements, level: INFO, msg: statement pdf rendered pages=3 duration=640ms}
+    - {id: log-04, ts: 2026-10-01T07:40, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-05, ts: 2026-10-01T07:43, service: accounts, level: WARN, msg: slow query 612ms on reporting replica (threshold 500ms) query=monthly_spend_rollup}
+    - {id: log-06, ts: 2026-10-01T07:50, service: mobile-gateway, level: INFO, msg: access log rotated file=access-4398.log}
+    - {id: log-07, ts: 2026-10-01T07:56, service: mobile-gateway, level: WARN, msg: request from client ios/6.1.0 missing Accept-Language; defaulting en-GB}
+    - {id: log-08, ts: 2026-10-01T08:00, service: notifications, level: INFO, msg: campaign tax-statement-2026 sent channel=push+email recipients=2104331}
+    - {id: log-09, ts: 2026-10-01T08:04, service: statements, level: INFO, msg: GET /v1/statements/annual/pdf 200 1.8s}
+    - {id: log-10, ts: 2026-10-01T08:07, service: statements, level: WARN, msg: request queue depth 4800; render worker pool 64/64 busy}
+    - {id: log-11, ts: 2026-10-01T08:09, service: ledger, level: WARN, msg: 'read replica cpu 96%, replication lag 14s'}
+    - {id: log-12, ts: 2026-10-01T08:12, service: accounts, level: WARN, msg: ledger balance read slow 2.4s account=a_10211}
+    - {id: log-13, ts: 2026-10-01T08:12, service: mobile-gateway, level: INFO, msg: route table reloaded routes=212 checksum=ae19}
+    - {id: log-14, ts: 2026-10-01T08:15, service: statements, level: WARN, msg: request queue depth 9100; shedding statements/annual/pdf with 503}
+    - {id: log-15, ts: 2026-10-01T08:21, service: ledger, level: WARN, msg: 'read replica: 1820 active queries from client=statements (normal ~150)'}
+    - {id: log-16, ts: 2026-10-01T08:26, service: notifications, level: INFO, msg: template cache warm templates=86}
+    - {id: log-17, ts: 2026-10-01T08:27, service: notifications, level: WARN, msg: push token invalid; removing token for device}
+    - {id: log-18, ts: 2026-10-01T08:33, service: accounts, level: WARN, msg: ledger balance read slow 2.1s}
+    - {id: log-19, ts: 2026-10-01T08:39, service: mobile-gateway, level: WARN, msg: request from client ios/6.1.0 missing Accept-Language; defaulting en-GB}
+    - {id: log-20, ts: 2026-10-01T08:43, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-21, ts: 2026-10-01T08:54, service: auth, level: INFO, msg: jwks cache refreshed keys=3}
+    - {id: log-22, ts: 2026-10-01T08:58, service: mobile-gateway, level: WARN, msg: request from client ios/6.1.0 missing Accept-Language; defaulting en-GB}
+    - {id: log-23, ts: 2026-10-01T09:03, service: mobile-gateway, level: INFO, msg: route table reloaded routes=212 checksum=ae19}
+    - {id: log-24, ts: 2026-10-01T09:13, service: auth, level: INFO, msg: session cleanup removed 7440 expired sessions}
+    metrics:
+    - {id: met-01, service: statements, metric: requests_per_min, region: global, start: 2026-10-01T07:40, step_min: 10, values: [880, 910, 7600, 8100, 8300, 7900, 7200, 6400, 5800]}
+    - {id: met-02, service: ledger, metric: replica_cpu_pct, region: global, start: 2026-10-01T07:40, step_min: 10, values: [34, 33, 91, 96, 97, 95, 92, 88, 84]}
+    - {id: met-03, service: accounts, metric: p99_latency_ms, region: global, start: 2026-10-01T07:40, step_min: 10, values: [380, 390, 2200, 2500, 2400, 2300, 2100, 1900, 1700]}
+    - {id: met-04, service: ledger, metric: primary_write_latency_p99_ms, region: global, start: 2026-10-01T07:40, step_min: 10, values: [41, 40, 43, 42, 44, 41, 42, 40, 41]}
+    deployments:
+    - {id: dep-01, ts: 2026-09-29T10:00, service: statements, kind: deploy, detail: 'v3.5.0: annual tax statement generation'}
+    history:
+    - {id: his-01, summary: 2026-03-28 ledger latency spike due to autovacuum on postings; resolved by tuning}
+    faults:
+    - {tool: query_metrics, kind: partial, times: 1, max_rows: 2}
+  truth:
+    outcome: conclusive
+    category: traffic_surge
+    component: statements
+    key_evidence: [log-08, log-10, log-15, met-01]
+    trap_component: ledger
+- incident: {id: BLIND-13, title: 'European card payments failing, errors persisting after rollback', description: 'EU card authorizations started failing around 09:45. Errors are still elevated at 10:45 even though cards was rolled back at 10:20.', service: cards, reported_at: 2026-09-10T10:50}
+  scenario: A cards canary release in eu-west broke EMV field encoding; errors drain slowly after the regional rollback and past vendor outages tempt a cardnet diagnosis.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [slow_recovery, regional, misleading_history]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-09-10T09:11, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-02, ts: 2026-09-10T09:16, service: cards, level: INFO, msg: tokenization key cache refreshed}
+    - {id: log-03, ts: 2026-09-10T09:19, service: ledger, level: INFO, msg: checkpoint complete wrote 7638 buffers}
+    - {id: log-04, ts: 2026-09-10T09:20, service: cards, level: INFO, msg: settlement file chunk uploaded seq=372}
+    - {id: log-05, ts: 2026-09-10T09:26, service: ledger, level: INFO, msg: postings committed batch=500 duration=41ms}
+    - {id: log-06, ts: 2026-09-10T09:27, service: fraud-scoring, level: INFO, msg: feature snapshot loaded rows=1.2M}
+    - {id: log-07, ts: 2026-09-10T09:42, service: cards, level: ERROR, msg: 'region=eu-west ISO8583 encode failed: field 55 invalid TLV length tag=9F26 build=v3.7.0'}
+    - {id: log-08, ts: 2026-09-10T09:44, service: cards, level: INFO, msg: region=us-east authorize approved build=v3.6.4}
+    - {id: log-09, ts: 2026-09-10T09:45, service: mobile-gateway, level: INFO, msg: route table reloaded routes=212 checksum=ae19}
+    - {id: log-10, ts: 2026-09-10T09:47, service: cards, level: ERROR, msg: 'region=eu-west cardnet rejected message: format error field 55 build=v3.7.0'}
+    - {id: log-11, ts: 2026-09-10T09:47, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-12, ts: 2026-09-10T09:51, service: notifications, level: INFO, msg: template cache warm templates=86}
+    - {id: log-13, ts: 2026-09-10T09:55, service: ledger, level: INFO, msg: nightly balance snapshot job heartbeat}
+    - {id: log-14, ts: 2026-09-10T09:58, service: cards, level: WARN, msg: region=eu-west failed authorizations queued for retry depth=9200}
+    - {id: log-15, ts: 2026-09-10T10:10, service: mobile-gateway, level: WARN, msg: request from client ios/6.1.0 missing Accept-Language; defaulting en-GB}
+    - {id: log-16, ts: 2026-09-10T10:21, service: cards, level: INFO, msg: region=eu-west build=v3.6.4 serving 100% traffic}
+    - {id: log-17, ts: 2026-09-10T10:24, service: cards, level: WARN, msg: region=eu-west retry queue depth 18400 draining at ~600/min}
+    - {id: log-18, ts: 2026-09-10T10:24, service: ledger, level: INFO, msg: nightly balance snapshot job heartbeat}
+    - {id: log-19, ts: 2026-09-10T10:38, service: cards, level: WARN, msg: region=eu-west retry queue depth 9800 draining}
+    - {id: log-20, ts: 2026-09-10T10:42, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-21, ts: 2026-09-10T10:44, service: ledger, level: INFO, msg: checkpoint complete wrote 1516 buffers}
+    - {id: log-22, ts: 2026-09-10T10:47, service: cards, level: INFO, msg: region=eu-west retry queue depth 3100}
+    metrics:
+    - {id: met-01, service: cards, metric: card_auth_error_ratio, region: eu-west, start: 2026-09-10T09:20, step_min: 5, values: [0.01, 0.012, 0.011, 0.012, 0.27, 0.29, 0.28, 0.3, 0.29, 0.28, 0.2, 0.15, 0.11, 0.07, 0.04, 0.02]}
+    - {id: met-02, service: cards, metric: card_auth_error_ratio, region: us-east, start: 2026-09-10T09:20, step_min: 5, values: [0.011, 0.01, 0.012, 0.011, 0.01, 0.012, 0.011, 0.01, 0.011, 0.012, 0.01, 0.011, 0.012, 0.01, 0.011, 0.01]}
+    deployments:
+    - {id: dep-01, ts: 2026-09-10T09:40, service: cards, kind: deploy, detail: v3.6.4 -> v3.7.0 canary region=eu-west only (EMV TLV builder refactor)}
+    - {id: dep-02, ts: 2026-09-10T10:20, service: cards, kind: rollback, detail: eu-west v3.7.0 -> v3.6.4}
+    history:
+    - {id: his-01, summary: '2026-06-11 card authorization failures: cardnet vendor outage on authorization API; resolved by vendor after 70m'}
+    - {id: his-02, summary: '2026-02-27 card declines spike: cardnet returned 503s during maintenance window'}
+    faults: []
+  truth:
+    outcome: conclusive
+    category: bad_deploy
+    component: cards
+    key_evidence: [dep-01, log-07, met-01, met-02]
+    trap_component: cardnet
+- incident: {id: BLIND-14, title: 'Users unable to log in, OTP codes failing', description: 'Login OTP verification failing for ~half of users since about 17:50. Auth reports codes expired. Still not fully healthy.', service: auth, reported_at: 2026-09-15T19:10}
+  scenario: A typo in an SMS rate-limit config throttled OTP delivery so codes expired before arrival; auth shows the errors and the queue drains slowly after revert.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [tool_timeout, cascading, slow_recovery]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-09-15T17:27, service: auth, level: INFO, msg: jwks cache refreshed keys=3}
+    - {id: log-02, ts: 2026-09-15T17:28, service: notifications, level: INFO, msg: email batch sent count=5079}
+    - {id: log-03, ts: 2026-09-15T17:31, service: mobile-gateway, level: WARN, msg: request from client ios/6.1.0 missing Accept-Language; defaulting en-GB}
+    - {id: log-04, ts: 2026-09-15T17:34, service: auth, level: WARN, msg: login attempt for unknown username (rate within baseline)}
+    - {id: log-05, ts: 2026-09-15T17:36, service: mobile-gateway, level: INFO, msg: health probe /healthz ok}
+    - {id: log-06, ts: 2026-09-15T17:38, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-07, ts: 2026-09-15T17:41, service: notifications, level: WARN, msg: sms rate limit reached (600/min); deferring message; queue_depth=1450}
+    - {id: log-08, ts: 2026-09-15T17:47, service: payments, level: INFO, msg: transfer accepted id=tr_1041 amount_band=B2}
+    - {id: log-09, ts: 2026-09-15T17:52, service: auth, level: WARN, msg: 'OTP verify failed: code expired (issued 7m ago, ttl 5m) user=u_8812'}
+    - {id: log-10, ts: 2026-09-15T17:58, service: notifications, level: WARN, msg: sms rate limit reached (600/min); queue_depth=12450 oldest=11m}
+    - {id: log-11, ts: 2026-09-15T18:05, service: auth, level: WARN, msg: 'OTP verify failed: code expired (issued 14m ago, ttl 5m) user=u_1209'}
+    - {id: log-12, ts: 2026-09-15T18:06, service: mobile-gateway, level: INFO, msg: health probe /healthz ok}
+    - {id: log-13, ts: 2026-09-15T18:12, service: auth, level: ERROR, msg: OTP verification failure rate 46% over 10m}
+    - {id: log-14, ts: 2026-09-15T18:12, service: payments, level: INFO, msg: FX rates refreshed source=ecb pairs=42}
+    - {id: log-15, ts: 2026-09-15T18:22, service: auth, level: INFO, msg: session cleanup removed 2454 expired sessions}
+    - {id: log-16, ts: 2026-09-15T18:22, service: payments, level: INFO, msg: FX rates refreshed source=ecb pairs=42}
+    - {id: log-17, ts: 2026-09-15T18:25, service: auth, level: INFO, msg: refresh token rotated client=android}
+    - {id: log-18, ts: 2026-09-15T18:33, service: payments, level: WARN, msg: duplicate submit suppressed by idempotency key}
+    - {id: log-19, ts: 2026-09-15T18:36, service: notifications, level: INFO, msg: sms rate limit updated to 6000/min; draining queue depth=31200}
+    - {id: log-20, ts: 2026-09-15T18:37, service: auth, level: INFO, msg: issued access token ttl=900s client=ios}
+    - {id: log-21, ts: 2026-09-15T18:52, service: notifications, level: INFO, msg: sms queue depth 14100 rate=5800/min}
+    - {id: log-22, ts: 2026-09-15T19:05, service: notifications, level: INFO, msg: sms queue depth 900}
+    metrics:
+    - {id: met-01, service: notifications, metric: sms_queue_depth, region: global, start: 2026-09-15T17:30, step_min: 10, values: [40, 1450, 6200, 12450, 19800, 26100, 31200, 14100, 900]}
+    - {id: met-02, service: auth, metric: otp_success_ratio, region: global, start: 2026-09-15T17:30, step_min: 10, values: [0.97, 0.95, 0.71, 0.55, 0.52, 0.5, 0.49, 0.62, 0.9]}
+    - {id: met-03, service: auth, metric: cpu_util_pct, region: global, start: 2026-09-15T17:30, step_min: 10, values: [28, 29, 27, 30, 29, 28, 30, 29, 28]}
+    deployments:
+    - {id: dep-01, ts: 2026-09-15T17:40, service: notify-svc, kind: config, detail: 'sms_provider.rate_limit_per_min 6000 -> 600 (CHG-8102, intended 6000 -> 6600)'}
+    - {id: dep-02, ts: 2026-09-15T18:35, service: notify-svc, kind: config, detail: revert sms_provider.rate_limit_per_min 600 -> 6000}
+    history:
+    - {id: his-01, summary: 2026-05-07 notifications push delays due to APNs certificate rotation}
+    - {id: his-02, summary: 2026-01-22 OTP failures after auth v4.9 changed OTP ttl to 60s; resolved by rollback}
+    faults:
+    - {tool: query_logs, kind: timeout, times: 1}
+  truth:
+    outcome: conclusive
+    category: config_change
+    component: notifications
+    key_evidence: [dep-01, log-07, met-01]
+    trap_component: auth
+- incident: {id: BLIND-15, title: Account summary errors for US customers, description: 'US customers see errors loading balances since about 12:40. KYC vendor latency has also been elevated today.', service: mobile-gateway, reported_at: 2026-09-21T13:10}
+  scenario: Accounts in us-east runs out of file descriptors; kyc vendor latency is elevated globally at the same time but EU accounts is fine, and accounts appears under several names.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [regional, conflicting_signals, name_mismatch]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-09-21T11:45, service: accounts-api, level: INFO, msg: address normalisation batch done records=5108}
+    - {id: log-02, ts: 2026-09-21T11:48, service: mobile-gateway, level: WARN, msg: request from client ios/6.1.0 missing Accept-Language; defaulting en-GB}
+    - {id: log-03, ts: 2026-09-21T11:48, service: accounts-api, level: INFO, msg: account limits cache refreshed entries=88120}
+    - {id: log-04, ts: 2026-09-21T12:05, service: kyc, level: WARN, msg: 'idverify latency p99 2.8s region=eu-west (vendor notice: scheduled maintenance)'}
+    - {id: log-05, ts: 2026-09-21T12:08, service: kyc, level: WARN, msg: 'idverify latency p99 2.7s region=us-east (vendor notice: scheduled maintenance)'}
+    - {id: log-06, ts: 2026-09-21T12:14, service: mobile-gateway, level: INFO, msg: POST /v2/transfers 201 118ms}
+    - {id: log-07, ts: 2026-09-21T12:20, service: accounts-api, level: INFO, msg: 'GET /v1/accounts/{id}/summary 200 33ms'}
+    - {id: log-08, ts: 2026-09-21T12:21, service: accounts-api, level: INFO, msg: account limits cache refreshed entries=88120}
+    - {id: log-09, ts: 2026-09-21T12:25, service: accounts-api, level: INFO, msg: address normalisation batch done records=5558}
+    - {id: log-10, ts: 2026-09-21T12:25, service: accounts-api, level: WARN, msg: slow query 612ms on reporting replica (threshold 500ms) query=monthly_spend_rollup}
+    - {id: log-11, ts: 2026-09-21T12:31, service: accounts-api, level: WARN, msg: region=us-east open file descriptors 61200/65535}
+    - {id: log-12, ts: 2026-09-21T12:38, service: accounts-api, level: ERROR, msg: 'region=us-east accept tcp 0.0.0.0:8080: accept4: too many open files (fd 65535/65535)'}
+    - {id: log-13, ts: 2026-09-21T12:39, service: mobile-gateway, level: WARN, msg: upstream accounts connection refused region=us-east}
+    - {id: log-14, ts: 2026-09-21T12:41, service: kyc, level: INFO, msg: document check accepted provider=idverify}
+    - {id: log-15, ts: 2026-09-21T12:44, service: accounts-api, level: ERROR, msg: 'region=us-east dial ledger.internal:8443: socket: too many open files'}
+    - {id: log-16, ts: 2026-09-21T12:45, service: kyc, level: INFO, msg: sanctions list refreshed entries=12904}
+    - {id: log-17, ts: 2026-09-21T12:45, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-18, ts: 2026-09-21T12:46, service: accounts-api, level: INFO, msg: 'region=eu-west GET /v1/accounts/{id}/summary 200 35ms'}
+    - {id: log-19, ts: 2026-09-21T12:47, service: auth, level: INFO, msg: refresh token rotated client=android}
+    - {id: log-20, ts: 2026-09-21T12:50, service: kyc, level: INFO, msg: document check accepted provider=idverify}
+    - {id: log-21, ts: 2026-09-21T12:52, service: kyc, level: WARN, msg: idverify latency p99 2.9s region=us-east}
+    - {id: log-22, ts: 2026-09-21T12:58, service: accounts-api, level: ERROR, msg: 'region=us-east accept4: too many open files'}
+    - {id: log-23, ts: 2026-09-21T12:58, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-24, ts: 2026-09-21T13:01, service: kyc, level: INFO, msg: document check accepted provider=idverify}
+    metrics:
+    - {id: met-01, service: accounts, metric: open_fds, region: us-east, start: 2026-09-21T11:30, step_min: 10, values: [41200, 44800, 48600, 52100, 55900, 59700, 63400, 65535, 65535, 65535]}
+    - {id: met-02, service: accounts, metric: open_fds, region: eu-west, start: 2026-09-21T11:30, step_min: 10, values: [8100, 8200, 8050, 8150, 8120, 8090, 8180, 8110, 8140, 8100]}
+    - {id: met-03, service: mobile-gateway, metric: accounts_5xx_ratio, region: us-east, start: 2026-09-21T11:30, step_min: 10, values: [0.0, 0.001, 0.0, 0.001, 0.001, 0.002, 0.08, 0.61, 0.66, 0.64]}
+    - {id: met-04, service: kyc, metric: idverify_latency_p99_ms, region: global, start: 2026-09-21T11:30, step_min: 10, values: [620, 610, 2500, 2800, 2750, 2900, 2850, 2800, 2900, 2880]}
+    deployments:
+    - {id: dep-01, ts: 2026-09-14T11:00, service: accounts-svc, kind: deploy, detail: 'v6.5.0: account nickname editing'}
+    history:
+    - {id: his-01, summary: 2026-05-15 kyc onboarding failures after kyc v1.7 deploy mis-parsed passport MRZ}
+    faults: []
+  truth:
+    outcome: conclusive
+    category: resource_exhaustion
+    component: accounts
+    key_evidence: [log-12, met-01, met-02]
+    trap_component: kyc
+- incident: {id: BLIND-16, title: Card authorizations slow and partially failing, description: 'Since about 20:05 roughly half of card authorizations fail with 503 and cards'' worker pool is saturated. Still recovering.', service: cards, reported_at: 2026-09-26T21:25}
+  scenario: Card network latency jumped 15x, tying up cards' worker pool; pool saturation looks like resource exhaustion in cards but CPU is low and the vendor posted a notice.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [tool_down, conflicting_signals, slow_recovery]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-09-26T19:30, service: cards, level: INFO, msg: tokenization key cache refreshed}
+    - {id: log-02, ts: 2026-09-26T19:41, service: cards, level: WARN, msg: merchant descriptor truncated to 22 chars}
+    - {id: log-03, ts: 2026-09-26T19:41, service: ledger, level: INFO, msg: checkpoint complete wrote 5849 buffers}
+    - {id: log-04, ts: 2026-09-26T19:50, service: fraud-scoring, level: INFO, msg: feature snapshot loaded rows=1.2M}
+    - {id: log-05, ts: 2026-09-26T19:52, service: ledger, level: INFO, msg: checkpoint complete wrote 2315 buffers}
+    - {id: log-06, ts: 2026-09-26T19:53, service: fraud-scoring, level: WARN, msg: feature 'device_age_days' missing for 0.8% of requests; imputing}
+    - {id: log-07, ts: 2026-09-26T20:04, service: cards, level: WARN, msg: cardnet authorize latency 4120ms (p50 normally 280ms)}
+    - {id: log-08, ts: 2026-09-26T20:06, service: cards, level: WARN, msg: worker pool exhausted 200/200 busy; rejecting authorize request with 503}
+    - {id: log-09, ts: 2026-09-26T20:09, service: cards, level: INFO, msg: 'cardnet incident notice CN-2291: ''Degraded latency on authorization cluster'' started 20:02'}
+    - {id: log-10, ts: 2026-09-26T20:15, service: cards, level: WARN, msg: worker pool exhausted 200/200 busy; queue wait 3.9s}
+    - {id: log-11, ts: 2026-09-26T20:22, service: cards, level: WARN, msg: cardnet authorize latency 3980ms}
+    - {id: log-12, ts: 2026-09-26T20:28, service: mobile-gateway, level: INFO, msg: route table reloaded routes=212 checksum=ae19}
+    - {id: log-13, ts: 2026-09-26T20:31, service: mobile-gateway, level: INFO, msg: GET /v2/accounts/summary 200 41ms}
+    - {id: log-14, ts: 2026-09-26T20:39, service: auth, level: INFO, msg: session cleanup removed 7851 expired sessions}
+    - {id: log-15, ts: 2026-09-26T20:44, service: mobile-gateway, level: WARN, msg: request from client ios/6.1.0 missing Accept-Language; defaulting en-GB}
+    - {id: log-16, ts: 2026-09-26T20:55, service: cards, level: INFO, msg: cardnet incident notice CN-2291 resolved}
+    - {id: log-17, ts: 2026-09-26T21:02, service: cards, level: WARN, msg: worker pool 188/200 busy; processing queued authorizations}
+    - {id: log-18, ts: 2026-09-26T21:03, service: auth, level: INFO, msg: jwks cache refreshed keys=3}
+    - {id: log-19, ts: 2026-09-26T21:08, service: auth, level: INFO, msg: session cleanup removed 1307 expired sessions}
+    - {id: log-20, ts: 2026-09-26T21:09, service: fraud-scoring, level: INFO, msg: rules engine heartbeat ok}
+    - {id: log-21, ts: 2026-09-26T21:15, service: mobile-gateway, level: INFO, msg: POST /v2/transfers 201 118ms}
+    - {id: log-22, ts: 2026-09-26T21:18, service: cards, level: INFO, msg: worker pool 64/200 busy}
+    metrics:
+    - {id: met-01, service: cards, metric: cardnet_latency_p50_ms, region: global, start: 2026-09-26T19:40, step_min: 10, values: [275, 281, 279, 4120, 3990, 4050, 3980, 4010, 290, 284, 280]}
+    - {id: met-02, service: cards, metric: worker_pool_busy, region: global, start: 2026-09-26T19:40, step_min: 10, values: [52, 49, 55, 200, 200, 200, 200, 200, 196, 188, 64]}
+    - {id: met-03, service: cards, metric: cpu_util_pct, region: global, start: 2026-09-26T19:40, step_min: 10, values: [41, 40, 42, 18, 17, 17, 18, 17, 39, 44, 41]}
+    - {id: met-04, service: cards, metric: card_auth_success_ratio, region: global, start: 2026-09-26T19:40, step_min: 10, values: [0.98, 0.979, 0.981, 0.52, 0.49, 0.5, 0.51, 0.5, 0.71, 0.88, 0.976]}
+    deployments:
+    - {id: dep-01, ts: 2026-09-23T14:20, service: cards, kind: deploy, detail: 'v3.7.2: receipt localisation'}
+    history:
+    - {id: his-01, summary: 2026-04-02 cards worker pool exhaustion; resolved by raising pool size 120 -> 200}
+    faults:
+    - {tool: search_incidents, kind: error}
+  truth:
+    outcome: conclusive
+    category: dependency_failure
+    component: cardnet
+    key_evidence: [log-07, log-09, met-01]
+    trap_component: cards
+- incident: {id: BLIND-17, title: App cannot connect for users in India, description: 'Users in India report the app ''cannot connect securely'' since 08:00. A gateway deploy went out at 07:55. Server-side 5xx is not elevated.', service: mobile-gateway, reported_at: 2026-10-03T08:30}
+  scenario: The ap-south edge certificate expired after renewals failed for days; a gateway deploy minutes earlier went to all regions yet only ap-south broke.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [regional, noisy_logs, misleading_timing]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-09-24T03:00, service: mobile-gateway, level: WARN, msg: 'cert-manager: renewal for api-ap-south.kestrelbank.example failed: ACME http-01 challenge returned 403 (attempt 1)'}
+    - {id: log-02, ts: 2026-09-28T03:00, service: mobile-gateway, level: WARN, msg: 'cert-manager: renewal for api-ap-south.kestrelbank.example failed: ACME http-01 challenge returned 403 (attempt 5)'}
+    - {id: log-03, ts: 2026-10-02T03:00, service: mobile-gateway, level: WARN, msg: 'cert-manager: renewal for api-ap-south.kestrelbank.example failed: ACME http-01 challenge returned 403 (attempt 9); certificate expires 2026-10-03T08:00Z'}
+    - {id: log-04, ts: 2026-10-03T07:12, service: notifications, level: WARN, msg: push token invalid; removing token for device}
+    - {id: log-05, ts: 2026-10-03T07:19, service: payments, level: INFO, msg: idempotency cache hit ratio=0.97}
+    - {id: log-06, ts: 2026-10-03T07:22, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-07, ts: 2026-10-03T07:26, service: mobile-gateway, level: INFO, msg: POST /v2/transfers 201 118ms}
+    - {id: log-08, ts: 2026-10-03T07:33, service: notifications, level: INFO, msg: template cache warm templates=86}
+    - {id: log-09, ts: 2026-10-03T07:34, service: auth, level: INFO, msg: session cleanup removed 3636 expired sessions}
+    - {id: log-10, ts: 2026-10-03T07:40, service: payments, level: INFO, msg: FX rates refreshed source=ecb pairs=42}
+    - {id: log-11, ts: 2026-10-03T07:48, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-12, ts: 2026-10-03T07:55, service: mobile-gateway, level: INFO, msg: route table reloaded routes=212 checksum=ae19}
+    - {id: log-13, ts: 2026-10-03T07:55, service: mobile-gateway, level: INFO, msg: 'v12.9.0 rolled out to us-east, eu-west, ap-south (header normalization)'}
+    - {id: log-14, ts: 2026-10-03T07:57, service: auth, level: INFO, msg: refresh token rotated client=android}
+    - {id: log-15, ts: 2026-10-03T07:57, service: notifications, level: INFO, msg: template cache warm templates=86}
+    - {id: log-16, ts: 2026-10-03T07:59, service: payments, level: INFO, msg: standing orders scheduler tick processed=9261}
+    - {id: log-17, ts: 2026-10-03T08:00, service: mobile-gateway, level: ERROR, msg: 'edge ap-south: TLS listener serving expired certificate api-ap-south.kestrelbank.example notAfter=2026-10-03T08:00:00Z; client handshakes failing'}
+    - {id: log-18, ts: 2026-10-03T08:01, service: cards, level: INFO, msg: authorize approved pan_token=tk_8037 mcc=5411}
+    - {id: log-19, ts: 2026-10-03T08:02, service: mobile-gateway, level: WARN, msg: 'edge ap-south: inbound request rate dropped 93% vs 1h ago'}
+    - {id: log-20, ts: 2026-10-03T08:04, service: accounts, level: INFO, msg: 'GET /v1/accounts/{id}/summary 200 33ms'}
+    - {id: log-21, ts: 2026-10-03T08:04, service: cards, level: WARN, msg: merchant descriptor truncated to 22 chars}
+    - {id: log-22, ts: 2026-10-03T08:05, service: mobile-gateway, level: INFO, msg: 'edge eu-west: requests_per_sec 2210 normal'}
+    - {id: log-23, ts: 2026-10-03T08:06, service: cards, level: INFO, msg: tokenization key cache refreshed}
+    - {id: log-24, ts: 2026-10-03T08:07, service: payments, level: INFO, msg: transfer accepted id=tr_6460 amount_band=B2}
+    - {id: log-25, ts: 2026-10-03T08:07, service: mobile-gateway, level: INFO, msg: access log rotated file=access-6518.log}
+    - {id: log-26, ts: 2026-10-03T08:09, service: mobile-gateway, level: ERROR, msg: 'edge ap-south: tls: client rejected certificate (bad certificate) count=8810 in 5m'}
+    - {id: log-27, ts: 2026-10-03T08:10, service: cards, level: INFO, msg: tokenization key cache refreshed}
+    - {id: log-28, ts: 2026-10-03T08:17, service: accounts, level: WARN, msg: slow query 612ms on reporting replica (threshold 500ms) query=monthly_spend_rollup}
+    - {id: log-29, ts: 2026-10-03T08:21, service: cards, level: INFO, msg: tokenization key cache refreshed}
+    - {id: log-30, ts: 2026-10-03T08:22, service: cards, level: WARN, msg: merchant descriptor truncated to 22 chars}
+    - {id: log-31, ts: 2026-10-03T08:24, service: mobile-gateway, level: INFO, msg: access log rotated file=access-8556.log}
+    - {id: log-32, ts: 2026-10-03T08:26, service: notifications, level: INFO, msg: email batch sent count=9927}
+    metrics:
+    - {id: met-01, service: mobile-gateway, metric: tls_handshake_failures_per_min, region: ap-south, start: 2026-10-03T07:30, step_min: 5, values: [3, 4, 2, 3, 5, 3, 1740, 1810, 1790, 1820, 1800, 1795]}
+    - {id: met-02, service: mobile-gateway, metric: requests_per_sec, region: ap-south, start: 2026-10-03T07:30, step_min: 5, values: [640, 655, 650, 662, 648, 651, 44, 41, 40, 42, 39, 41]}
+    - {id: met-03, service: mobile-gateway, metric: requests_per_sec, region: us-east, start: 2026-10-03T07:30, step_min: 5, values: [3100, 3150, 3120, 3180, 3160, 3170, 3190, 3200, 3210, 3220, 3215, 3230]}
+    - {id: met-04, service: mobile-gateway, metric: http_5xx_ratio, region: ap-south, start: 2026-10-03T07:30, step_min: 5, values: [0.001, 0.001, 0.002, 0.001, 0.001, 0.001, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
+    deployments:
+    - {id: dep-01, ts: 2026-09-24T02:30, service: mobile-gateway, kind: config, detail: 'edge ap-south: WAF rule blocks /.well-known/* from non-allowlisted IPs'}
+    - {id: dep-02, ts: 2026-10-03T07:55, service: mobile-gateway, kind: deploy, detail: 'v12.8.1 -> v12.9.0: header normalization (all regions)'}
+    history:
+    - {id: his-01, summary: 2025-12-03 gateway 503s after mobile-gateway v12.0 deploy introduced catastrophic regex in routing; resolved by rollback}
+    faults: []
+  truth:
+    outcome: conclusive
+    category: expired_certificate
+    component: mobile-gateway
+    key_evidence: [log-01, log-17, met-01]
+- incident: {id: BLIND-18, title: Login timeouts for US users overnight, description: 'US users report login spinning and timing out since ~01:50. Auth had a deploy and a config change earlier tonight. Mitigation in place but latency still high.', service: auth, reported_at: 2026-10-08T02:50}
+  scenario: A credential-stuffing burst from two ASNs saturated auth in us-east; earlier auth deploy and config change are unrelated and latency recovers slowly after the WAF block.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [regional, noisy_logs, multiple_changes, slow_recovery]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-10-08T01:02, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-02, ts: 2026-10-08T01:06, service: notifications, level: WARN, msg: push token invalid; removing token for device}
+    - {id: log-03, ts: 2026-10-08T01:12, service: auth, level: INFO, msg: 'build v5.2.0 serving; locale bundles es,pt loaded'}
+    - {id: log-04, ts: 2026-10-08T01:17, service: auth, level: INFO, msg: jwks cache refreshed keys=3}
+    - {id: log-05, ts: 2026-10-08T01:24, service: mobile-gateway, level: INFO, msg: health probe /healthz ok}
+    - {id: log-06, ts: 2026-10-08T01:25, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-07, ts: 2026-10-08T01:26, service: auth, level: INFO, msg: session ttl now 1200s}
+    - {id: log-08, ts: 2026-10-08T01:27, service: mobile-gateway, level: WARN, msg: request from client ios/6.1.0 missing Accept-Language; defaulting en-GB}
+    - {id: log-09, ts: 2026-10-08T01:28, service: payments, level: INFO, msg: standing orders scheduler tick processed=6345}
+    - {id: log-10, ts: 2026-10-08T01:29, service: mobile-gateway, level: WARN, msg: request from client ios/6.1.0 missing Accept-Language; defaulting en-GB}
+    - {id: log-11, ts: 2026-10-08T01:31, service: auth, level: INFO, msg: session cleanup removed 9057 expired sessions}
+    - {id: log-12, ts: 2026-10-08T01:32, service: notifications, level: INFO, msg: template cache warm templates=86}
+    - {id: log-13, ts: 2026-10-08T01:36, service: mobile-gateway, level: INFO, msg: route table reloaded routes=212 checksum=ae19}
+    - {id: log-14, ts: 2026-10-08T01:43, service: auth, level: INFO, msg: jwks cache refreshed keys=3}
+    - {id: log-15, ts: 2026-10-08T01:52, service: auth, level: WARN, msg: 'region=us-east login rps 9800 (baseline 450); 97% invalid_password; top source ASNs 64512, 64513'}
+    - {id: log-16, ts: 2026-10-08T01:52, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-17, ts: 2026-10-08T01:52, service: accounts, level: INFO, msg: account limits cache refreshed entries=88120}
+    - {id: log-18, ts: 2026-10-08T01:55, service: auth, level: WARN, msg: region=us-east bcrypt worker queue full; login latency 6.2s}
+    - {id: log-19, ts: 2026-10-08T01:57, service: mobile-gateway, level: INFO, msg: access log rotated file=access-2663.log}
+    - {id: log-20, ts: 2026-10-08T01:58, service: mobile-gateway, level: WARN, msg: region=us-east POST /v1/login 504 ratio 41%}
+    - {id: log-21, ts: 2026-10-08T02:03, service: auth, level: INFO, msg: region=eu-west login rps 120 normal}
+    - {id: log-22, ts: 2026-10-08T02:09, service: accounts, level: WARN, msg: slow query 612ms on reporting replica (threshold 500ms) query=monthly_spend_rollup}
+    - {id: log-23, ts: 2026-10-08T02:10, service: auth, level: WARN, msg: login attempt for unknown username (rate within baseline)}
+    - {id: log-24, ts: 2026-10-08T02:10, service: notifications, level: WARN, msg: push token invalid; removing token for device}
+    - {id: log-25, ts: 2026-10-08T02:11, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-26, ts: 2026-10-08T02:13, service: accounts, level: INFO, msg: account limits cache refreshed entries=88120}
+    - {id: log-27, ts: 2026-10-08T02:15, service: accounts, level: INFO, msg: account limits cache refreshed entries=88120}
+    - {id: log-28, ts: 2026-10-08T02:17, service: mobile-gateway, level: INFO, msg: GET /v2/accounts/summary 200 41ms}
+    - {id: log-29, ts: 2026-10-08T02:19, service: payments, level: INFO, msg: idempotency cache hit ratio=0.97}
+    - {id: log-30, ts: 2026-10-08T02:21, service: mobile-gateway, level: INFO, msg: WAF blocked 812k requests from ASN 64512/64513 in first minute}
+    - {id: log-31, ts: 2026-10-08T02:24, service: auth, level: INFO, msg: region=us-east login rps 610; bcrypt queue draining depth=48000}
+    - {id: log-32, ts: 2026-10-08T02:25, service: mobile-gateway, level: WARN, msg: request from client ios/6.1.0 missing Accept-Language; defaulting en-GB}
+    - {id: log-33, ts: 2026-10-08T02:39, service: accounts, level: INFO, msg: 'GET /v1/accounts/{id}/summary 200 33ms'}
+    - {id: log-34, ts: 2026-10-08T02:39, service: payments, level: INFO, msg: standing orders scheduler tick processed=921}
+    - {id: log-35, ts: 2026-10-08T02:40, service: auth, level: INFO, msg: region=us-east bcrypt queue depth 9000; login latency 1.4s}
+    metrics:
+    - {id: met-01, service: auth, metric: login_requests_per_sec, region: us-east, start: 2026-10-08T01:30, step_min: 10, values: [440, 455, 9800, 10200, 9900, 620, 600, 580]}
+    - {id: met-02, service: auth, metric: login_requests_per_sec, region: eu-west, start: 2026-10-08T01:30, step_min: 10, values: [118, 121, 120, 119, 122, 120, 118, 121]}
+    - {id: met-03, service: auth, metric: login_latency_p99_ms, region: us-east, start: 2026-10-08T01:30, step_min: 10, values: [180, 190, 6200, 6400, 6300, 4100, 2600, 1400]}
+    - {id: met-04, service: auth, metric: cpu_util_pct, region: us-east, start: 2026-10-08T01:30, step_min: 10, values: [24, 25, 99, 99, 99, 71, 55, 42]}
+    deployments:
+    - {id: dep-01, ts: 2026-10-08T01:10, service: identity-auth, kind: deploy, detail: 'v5.1.3 -> v5.2.0: translated error messages (es, pt)'}
+    - {id: dep-02, ts: 2026-10-08T01:25, service: identity-auth, kind: config, detail: session_ttl_s 900 -> 1200}
+    - {id: dep-03, ts: 2026-10-08T02:20, service: mobile-gateway, kind: config, detail: 'edge WAF: block ASN 64512, 64513 on POST /v1/login'}
+    history:
+    - {id: his-01, summary: 2026-01-22 OTP failures after auth v4.9 changed OTP ttl; resolved by rollback}
+    faults: []
+  truth:
+    outcome: conclusive
+    category: traffic_surge
+    component: auth
+    key_evidence: [log-15, met-01, met-02]
+- incident: {id: BLIND-19, title: Brief burst of gateway errors across all features, description: 'Between 14:31 and 14:43 the gateway returned elevated 5xx for every backend, then recovered on its own. No one changed anything.', service: mobile-gateway, reported_at: 2026-10-12T15:00}
+  scenario: A 12-minute self-resolving timeout burst to every backend with no backend errors, no changes and flat dependencies; history suggests causes the data cannot confirm.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [noisy_logs, misleading_history]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-10-12T14:05, service: cards, level: WARN, msg: merchant descriptor truncated to 22 chars}
+    - {id: log-02, ts: 2026-10-12T14:06, service: accounts, level: INFO, msg: 'GET /v1/accounts/{id}/summary 200 33ms'}
+    - {id: log-03, ts: 2026-10-12T14:06, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-04, ts: 2026-10-12T14:07, service: ledger, level: INFO, msg: nightly balance snapshot job heartbeat}
+    - {id: log-05, ts: 2026-10-12T14:10, service: ledger, level: INFO, msg: checkpoint complete wrote 3368 buffers}
+    - {id: log-06, ts: 2026-10-12T14:11, service: cards, level: INFO, msg: authorize approved pan_token=tk_9839 mcc=5411}
+    - {id: log-07, ts: 2026-10-12T14:15, service: payments, level: INFO, msg: transfer accepted id=tr_4270 amount_band=B2}
+    - {id: log-08, ts: 2026-10-12T14:22, service: auth, level: INFO, msg: session cleanup removed 3652 expired sessions}
+    - {id: log-09, ts: 2026-10-12T14:22, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-10, ts: 2026-10-12T14:25, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-11, ts: 2026-10-12T14:28, service: accounts, level: WARN, msg: slow query 612ms on reporting replica (threshold 500ms) query=monthly_spend_rollup}
+    - {id: log-12, ts: 2026-10-12T14:30, service: cards, level: INFO, msg: authorize approved pan_token=tk_4437 mcc=5411}
+    - {id: log-13, ts: 2026-10-12T14:30, service: mobile-gateway, level: INFO, msg: POST /v2/transfers 201 118ms}
+    - {id: log-14, ts: 2026-10-12T14:30, service: mobile-gateway, level: INFO, msg: route table reloaded routes=212 checksum=ae19}
+    - {id: log-15, ts: 2026-10-12T14:31, service: mobile-gateway, level: WARN, msg: upstream timeout after 3000ms to payments}
+    - {id: log-16, ts: 2026-10-12T14:31, service: mobile-gateway, level: WARN, msg: upstream timeout after 3000ms to accounts}
+    - {id: log-17, ts: 2026-10-12T14:31, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-18, ts: 2026-10-12T14:32, service: mobile-gateway, level: WARN, msg: upstream timeout after 3000ms to cards}
+    - {id: log-19, ts: 2026-10-12T14:34, service: mobile-gateway, level: ERROR, msg: 5xx ratio 14% over last 3m}
+    - {id: log-20, ts: 2026-10-12T14:34, service: mobile-gateway, level: INFO, msg: route table reloaded routes=212 checksum=ae19}
+    - {id: log-21, ts: 2026-10-12T14:38, service: mobile-gateway, level: WARN, msg: upstream timeout after 3000ms to statements}
+    - {id: log-22, ts: 2026-10-12T14:39, service: auth, level: INFO, msg: issued access token ttl=900s client=ios}
+    - {id: log-23, ts: 2026-10-12T14:42, service: accounts, level: INFO, msg: address normalisation batch done records=3533}
+    - {id: log-24, ts: 2026-10-12T14:43, service: mobile-gateway, level: INFO, msg: 5xx ratio back under 1%}
+    - {id: log-25, ts: 2026-10-12T14:48, service: payments, level: INFO, msg: idempotency cache hit ratio=0.97}
+    - {id: log-26, ts: 2026-10-12T14:48, service: mobile-gateway, level: INFO, msg: access log rotated file=access-1437.log}
+    - {id: log-27, ts: 2026-10-12T14:49, service: payments, level: INFO, msg: transfer accepted id=tr_3568 amount_band=B2}
+    - {id: log-28, ts: 2026-10-12T14:50, service: cards, level: INFO, msg: settlement file chunk uploaded seq=4178}
+    - {id: log-29, ts: 2026-10-12T14:51, service: cards, level: INFO, msg: authorize approved pan_token=tk_8555 mcc=5411}
+    - {id: log-30, ts: 2026-10-12T14:55, service: mobile-gateway, level: INFO, msg: health probe /healthz ok}
+    - {id: log-31, ts: 2026-10-12T14:56, service: auth, level: INFO, msg: session cleanup removed 6734 expired sessions}
+    - {id: log-32, ts: 2026-10-12T14:57, service: ledger, level: INFO, msg: nightly balance snapshot job heartbeat}
+    metrics:
+    - {id: met-01, service: mobile-gateway, metric: http_5xx_ratio, region: global, start: 2026-10-12T14:15, step_min: 3, values: [0.002, 0.001, 0.002, 0.001, 0.002, 0.09, 0.14, 0.13, 0.12, 0.002, 0.001, 0.002]}
+    - {id: met-02, service: payments, metric: requests_per_sec, region: global, start: 2026-10-12T14:15, step_min: 3, values: [820, 815, 830, 825, 818, 610, 590, 600, 605, 822, 819, 826]}
+    - {id: met-03, service: accounts, metric: requests_per_sec, region: global, start: 2026-10-12T14:15, step_min: 3, values: [1210, 1195, 1220, 1205, 1215, 900, 880, 890, 910, 1208, 1212, 1201]}
+    - {id: met-04, service: ledger, metric: write_latency_p99_ms, region: global, start: 2026-10-12T14:15, step_min: 3, values: [42, 44, 41, 43, 42, 43, 41, 44, 42, 43, 41, 42]}
+    - {id: met-05, service: mobile-gateway, metric: cpu_util_pct, region: global, start: 2026-10-12T14:15, step_min: 3, values: [36, 35, 37, 36, 35, 34, 33, 34, 35, 36, 35, 36]}
+    deployments:
+    - {id: dep-01, ts: 2026-10-09T10:30, service: cards, kind: deploy, detail: 'v3.7.4: settlement retries'}
+    history:
+    - {id: his-01, summary: 2026-05-21 gateway upstream timeouts across services caused by ledger GC pauses; resolved by heap tuning}
+    - {id: his-02, summary: 2026-07-30 gateway timeouts during cloud provider network event in us-east}
+    faults: []
+  truth:
+    outcome: inconclusive
+    category: unknown
+    component: ''
+    key_evidence: []
+- incident: {id: BLIND-20, title: Payments 5xx climbing in Europe, description: 'Payments error rate in eu-west has been climbing since ~10:10. Log search and the deploy tracker are both reporting outages right now.', service: payments, reported_at: 2026-10-15T10:35}
+  scenario: Logs and deployment tools are down; metrics only show payments errors with mild movement in several dependencies, so no cause can be singled out.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [tool_down, tool_timeout]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-10-15T10:12, service: payments, level: ERROR, msg: request failed}
+    - {id: log-02, ts: 2026-10-15T10:15, service: payments, level: ERROR, msg: request failed}
+    - {id: log-03, ts: 2026-10-15T10:20, service: mobile-gateway, level: WARN, msg: upstream payments returned 500}
+    metrics:
+    - {id: met-01, service: payments, metric: http_5xx_ratio, region: eu-west, start: 2026-10-15T09:50, step_min: 5, values: [0.002, 0.002, 0.003, 0.002, 0.05, 0.11, 0.16, 0.19, 0.21, 0.22]}
+    - {id: met-02, service: ledger, metric: write_latency_p99_ms, region: eu-west, start: 2026-10-15T09:50, step_min: 5, values: [41, 43, 42, 44, 52, 61, 58, 63, 60, 62]}
+    - {id: met-03, service: fraud-scoring, metric: score_latency_p99_ms, region: eu-west, start: 2026-10-15T09:50, step_min: 5, values: [30, 31, 29, 30, 38, 45, 42, 47, 44, 46]}
+    - {id: met-04, service: payments, metric: cpu_util_pct, region: eu-west, start: 2026-10-15T09:50, step_min: 5, values: [40, 41, 39, 42, 55, 63, 66, 68, 70, 71]}
+    deployments: []
+    history:
+    - {id: his-01, summary: 2026-02-11 payments timeouts after payments v4.6 deploy added synchronous audit write}
+    - {id: his-02, summary: 2026-06-02 payments declines due to ledger balance cache stale after failover}
+    faults:
+    - {tool: query_logs, kind: error}
+    - {tool: get_deployments, kind: error}
+    - {tool: query_metrics, kind: timeout, times: 1}
+  truth:
+    outcome: inconclusive
+    category: unknown
+    component: ''
+    key_evidence: []
+- incident: {id: BLIND-21, title: Card authorizations timing out, description: 'About a quarter of card authorizations time out since 14:02. Cards shipped a new authorization client at 14:00 and the card network posted a degradation notice at the same time.', service: cards, reported_at: 2026-10-19T14:30}
+  scenario: A cards client rewrite and a vendor degradation notice coincide exactly; the only evidence is timeouts to the vendor, which both explain equally.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [conflicting_signals, multiple_changes, misleading_timing]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-10-19T13:35, service: cards, level: INFO, msg: settlement file chunk uploaded seq=5306}
+    - {id: log-02, ts: 2026-10-19T13:42, service: fraud-scoring, level: WARN, msg: feature 'device_age_days' missing for 0.8% of requests; imputing}
+    - {id: log-03, ts: 2026-10-19T13:44, service: mobile-gateway, level: INFO, msg: POST /v2/transfers 201 118ms}
+    - {id: log-04, ts: 2026-10-19T13:46, service: ledger, level: INFO, msg: checkpoint complete wrote 9092 buffers}
+    - {id: log-05, ts: 2026-10-19T13:47, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-06, ts: 2026-10-19T13:49, service: fraud-scoring, level: WARN, msg: feature 'device_age_days' missing for 0.8% of requests; imputing}
+    - {id: log-07, ts: 2026-10-19T13:50, service: ledger, level: INFO, msg: checkpoint complete wrote 6284 buffers}
+    - {id: log-08, ts: 2026-10-19T13:58, service: ledger, level: INFO, msg: checkpoint complete wrote 5948 buffers}
+    - {id: log-09, ts: 2026-10-19T14:00, service: cards, level: INFO, msg: build v3.8.0 serving 100% traffic}
+    - {id: log-10, ts: 2026-10-19T14:01, service: cards, level: INFO, msg: 'cardnet status feed: ''Minor degradation on authorization API'' posted 14:00'}
+    - {id: log-11, ts: 2026-10-19T14:02, service: cards, level: WARN, msg: cardnet authorize timeout after 3000ms}
+    - {id: log-12, ts: 2026-10-19T14:02, service: notifications, level: INFO, msg: email batch sent count=1286}
+    - {id: log-13, ts: 2026-10-19T14:03, service: fraud-scoring, level: INFO, msg: feature snapshot refresh interval now 10m}
+    - {id: log-14, ts: 2026-10-19T14:03, service: ledger, level: INFO, msg: nightly balance snapshot job heartbeat}
+    - {id: log-15, ts: 2026-10-19T14:04, service: ledger, level: INFO, msg: postings committed batch=500 duration=41ms}
+    - {id: log-16, ts: 2026-10-19T14:05, service: cards, level: WARN, msg: cardnet authorize timeout after 3000ms}
+    - {id: log-17, ts: 2026-10-19T14:06, service: fraud-scoring, level: WARN, msg: feature 'device_age_days' missing for 0.8% of requests; imputing}
+    - {id: log-18, ts: 2026-10-19T14:08, service: fraud-scoring, level: INFO, msg: rules engine heartbeat ok}
+    - {id: log-19, ts: 2026-10-19T14:09, service: cards, level: ERROR, msg: 'authorization failed: upstream timeout (count=920 in 5m)'}
+    - {id: log-20, ts: 2026-10-19T14:12, service: notifications, level: WARN, msg: push token invalid; removing token for device}
+    - {id: log-21, ts: 2026-10-19T14:16, service: cards, level: WARN, msg: cardnet authorize timeout after 3000ms}
+    - {id: log-22, ts: 2026-10-19T14:24, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-23, ts: 2026-10-19T14:25, service: notifications, level: INFO, msg: email batch sent count=1544}
+    metrics:
+    - {id: met-01, service: cards, metric: card_auth_error_ratio, region: global, start: 2026-10-19T13:40, step_min: 5, values: [0.01, 0.011, 0.01, 0.012, 0.21, 0.24, 0.23, 0.22, 0.24, 0.23]}
+    - {id: met-02, service: cards, metric: cardnet_latency_p99_ms, region: global, start: 2026-10-19T13:40, step_min: 5, values: [610, 620, 600, 615, 3000, 3000, 3000, 3000, 3000, 3000]}
+    - {id: met-03, service: fraud-scoring, metric: score_latency_p99_ms, region: global, start: 2026-10-19T13:40, step_min: 5, values: [30, 31, 30, 29, 31, 30, 32, 31, 30, 31]}
+    deployments:
+    - {id: dep-01, ts: 2026-10-19T13:58, service: fraud-scoring, kind: config, detail: feature snapshot refresh interval 15m -> 10m}
+    - {id: dep-02, ts: 2026-10-19T14:00, service: cards, kind: deploy, detail: 'v3.7.4 -> v3.8.0: authorization client rewrite (new HTTP/2 connection pooling to cardnet)'}
+    history:
+    - {id: his-01, summary: '2026-06-11 card authorization failures: cardnet vendor outage; resolved by vendor'}
+    - {id: his-02, summary: 2026-01-19 card authorizations failing after cards v3.1.0 deploy; resolved by rollback}
+    faults: []
+  truth:
+    outcome: inconclusive
+    category: unknown
+    component: ''
+    key_evidence: []
+- incident: {id: BLIND-22, title: Statement downloads failing, description: 'Customers cannot download statements since ~09:30. The statements team says their logs for the morning look empty.', service: mobile-gateway, reported_at: 2026-10-22T10:20}
+  scenario: Statements' logs for the window were dropped by the log shipper, metrics come back truncated, and nothing else changed recently; the cause is not in the data.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [tool_partial, name_mismatch]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-10-22T09:02, service: statements-prod, level: INFO, msg: statement pdf rendered pages=2 duration=610ms}
+    - {id: log-02, ts: 2026-10-22T09:10, service: statements-prod, level: INFO, msg: font cache hit ratio=0.99}
+    - {id: log-03, ts: 2026-10-22T10:01, service: log-shipper, level: WARN, msg: 'fluent-bit: dropped 41m of buffered logs for namespace statements-prod (buffer overflow)'}
+    - {id: log-04, ts: 2026-10-22T10:05, service: mobile-gateway, level: WARN, msg: upstream statements returned 500 for GET /v2/statements}
+    - {id: log-05, ts: 2026-10-22T10:12, service: mobile-gateway, level: WARN, msg: upstream statements returned 500 for GET /v2/statements}
+    metrics:
+    - {id: met-01, service: statements, metric: http_5xx_ratio, region: global, start: 2026-10-22T09:15, step_min: 5, values: [0.001, 0.002, 0.001, 0.08, 0.17, 0.22, 0.24, 0.23, 0.25, 0.24, 0.23, 0.24]}
+    - {id: met-02, service: statements, metric: cpu_util_pct, region: global, start: 2026-10-22T09:15, step_min: 5, values: [22, 23, 22, 24, 23, 22, 23, 24, 22, 23, 22, 23]}
+    - {id: met-03, service: statements, metric: memory_used_pct, region: global, start: 2026-10-22T09:15, step_min: 5, values: [48, 49, 48, 50, 49, 48, 49, 50, 49, 48, 49, 50]}
+    - {id: met-04, service: ledger, metric: read_latency_p99_ms, region: global, start: 2026-10-22T09:15, step_min: 5, values: [12, 13, 12, 12, 13, 12, 12, 13, 12, 13, 12, 12]}
+    deployments:
+    - {id: dep-01, ts: 2026-10-19T16:00, service: stmt-renderer, kind: deploy, detail: 'v3.6.1: footer copy update'}
+    history:
+    - {id: his-01, summary: 2026-04-18 statements PDF rendering slow due to font cache eviction}
+    faults:
+    - {tool: query_metrics, kind: partial, max_rows: 1}
+  truth:
+    outcome: inconclusive
+    category: unknown
+    component: ''
+    key_evidence: []
+- incident: {id: BLIND-23, title: Slow transfers in Europe, description: 'EU transfers take 1.5s instead of 0.2s since about 10:05. No errors. A payments config change went out at 10:00.', service: payments, reported_at: 2026-10-27T10:55}
+  scenario: EU payments latency rose with flat CPU, flat dependencies and no errors; the only nearby change was scoped to us-east, so nothing in the data explains it.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [regional, misleading_timing, tool_timeout]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-10-27T09:32, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-02, ts: 2026-10-27T09:34, service: auth, level: INFO, msg: jwks cache refreshed keys=3}
+    - {id: log-03, ts: 2026-10-27T09:34, service: mobile-gateway, level: INFO, msg: route table reloaded routes=212 checksum=ae19}
+    - {id: log-04, ts: 2026-10-27T09:46, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-05, ts: 2026-10-27T09:48, service: auth, level: INFO, msg: jwks cache refreshed keys=3}
+    - {id: log-06, ts: 2026-10-27T09:49, service: auth, level: WARN, msg: login attempt for unknown username (rate within baseline)}
+    - {id: log-07, ts: 2026-10-27T09:50, service: mobile-gateway, level: WARN, msg: client sent deprecated header X-App-Build; ignoring}
+    - {id: log-08, ts: 2026-10-27T09:52, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-09, ts: 2026-10-27T09:56, service: auth, level: WARN, msg: login attempt for unknown username (rate within baseline)}
+    - {id: log-10, ts: 2026-10-27T10:01, service: payments, level: INFO, msg: region=us-east ledger client pool resized to 40}
+    - {id: log-11, ts: 2026-10-27T10:19, service: auth, level: INFO, msg: session cleanup removed 4887 expired sessions}
+    - {id: log-12, ts: 2026-10-27T10:20, service: payments, level: INFO, msg: region=eu-west transfer accepted id=tr_99012 latency=1.4s}
+    - {id: log-13, ts: 2026-10-27T10:26, service: ledger, level: INFO, msg: postings committed batch=500 duration=41ms}
+    - {id: log-14, ts: 2026-10-27T10:26, service: auth, level: INFO, msg: jwks cache refreshed keys=3}
+    - {id: log-15, ts: 2026-10-27T10:27, service: mobile-gateway, level: INFO, msg: health probe /healthz ok}
+    - {id: log-16, ts: 2026-10-27T10:27, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-17, ts: 2026-10-27T10:31, service: payments, level: INFO, msg: region=eu-west transfer accepted id=tr_99088 latency=1.6s}
+    - {id: log-18, ts: 2026-10-27T10:34, service: ledger, level: WARN, msg: autovacuum on table postings_archive took 38s}
+    - {id: log-19, ts: 2026-10-27T10:36, service: notifications, level: INFO, msg: push sent provider=apns batch=200}
+    - {id: log-20, ts: 2026-10-27T10:41, service: ledger, level: INFO, msg: nightly balance snapshot job heartbeat}
+    - {id: log-21, ts: 2026-10-27T10:43, service: mobile-gateway, level: INFO, msg: route table reloaded routes=212 checksum=ae19}
+    - {id: log-22, ts: 2026-10-27T10:49, service: auth, level: INFO, msg: issued access token ttl=900s client=ios}
+    metrics:
+    - {id: met-01, service: payments, metric: p99_latency_ms, region: eu-west, start: 2026-10-27T09:40, step_min: 5, values: [220, 215, 225, 218, 222, 1350, 1420, 1500, 1480, 1460, 1470, 1490]}
+    - {id: met-02, service: payments, metric: p99_latency_ms, region: us-east, start: 2026-10-27T09:40, step_min: 5, values: [210, 212, 208, 215, 211, 214, 209, 212, 210, 213, 211, 210]}
+    - {id: met-03, service: payments, metric: http_5xx_ratio, region: eu-west, start: 2026-10-27T09:40, step_min: 5, values: [0.001, 0.001, 0.002, 0.001, 0.001, 0.002, 0.001, 0.002, 0.001, 0.001, 0.002, 0.001]}
+    - {id: met-04, service: payments, metric: cpu_util_pct, region: eu-west, start: 2026-10-27T09:40, step_min: 5, values: [35, 36, 34, 35, 36, 35, 34, 36, 35, 34, 35, 36]}
+    - {id: met-05, service: ledger, metric: write_latency_p99_ms, region: eu-west, start: 2026-10-27T09:40, step_min: 5, values: [42, 41, 43, 42, 44, 43, 41, 42, 43, 44, 42, 41]}
+    - {id: met-06, service: fraud-scoring, metric: score_latency_p99_ms, region: eu-west, start: 2026-10-27T09:40, step_min: 5, values: [30, 31, 29, 30, 31, 30, 31, 30, 29, 31, 30, 30]}
+    deployments:
+    - {id: dep-01, ts: 2026-10-26T15:00, service: identity-auth, kind: deploy, detail: 'v5.3.0: passkey enrollment UI (all regions)'}
+    - {id: dep-02, ts: 2026-10-27T10:00, service: payments-api, kind: config, detail: 'us-east only: ledger client pool size 50 -> 40'}
+    history:
+    - {id: his-01, summary: 2026-02-11 payments timeouts after payments v4.6 deploy added synchronous audit write}
+    faults:
+    - {tool: get_deployments, kind: timeout, times: 1}
+  truth:
+    outcome: inconclusive
+    category: unknown
+    component: ''
+    key_evidence: []
+- incident: {id: BLIND-24, title: 'Simultaneous errors in payments, cards and accounts', description: 'At 05:12 payments, cards and accounts in us-east all started erroring at once, then recovered by ~05:35. Each calls a different downstream.', service: mobile-gateway, reported_at: 2026-11-02T05:50}
+  scenario: Three services hit connection resets to unrelated targets at the same instant with no changes and healthy targets; a shared network or infra cause is likely but nothing identifies it.
+  provenance: synthetic
+  split: holdout
+  reviewed_by: blind-authoring-agent
+  tags: [tool_down, cascading]
+  world:
+    logs:
+    - {id: log-01, ts: 2026-11-02T04:40, service: payments, level: WARN, msg: duplicate submit suppressed by idempotency key}
+    - {id: log-02, ts: 2026-11-02T04:42, service: cards, level: INFO, msg: tokenization key cache refreshed}
+    - {id: log-03, ts: 2026-11-02T04:42, service: payments, level: INFO, msg: transfer accepted id=tr_9336 amount_band=B2}
+    - {id: log-04, ts: 2026-11-02T04:47, service: cards, level: INFO, msg: tokenization key cache refreshed}
+    - {id: log-05, ts: 2026-11-02T04:47, service: accounts, level: INFO, msg: address normalisation batch done records=4471}
+    - {id: log-06, ts: 2026-11-02T04:47, service: accounts, level: WARN, msg: slow query 612ms on reporting replica (threshold 500ms) query=monthly_spend_rollup}
+    - {id: log-07, ts: 2026-11-02T04:50, service: auth, level: INFO, msg: issued access token ttl=900s client=ios}
+    - {id: log-08, ts: 2026-11-02T04:51, service: auth, level: INFO, msg: issued access token ttl=900s client=ios}
+    - {id: log-09, ts: 2026-11-02T05:07, service: accounts, level: INFO, msg: account limits cache refreshed entries=88120}
+    - {id: log-10, ts: 2026-11-02T05:07, service: cards, level: INFO, msg: authorize approved pan_token=tk_207 mcc=5411}
+    - {id: log-11, ts: 2026-11-02T05:12, service: payments, level: ERROR, msg: 'region=us-east connection reset by peer calling ledger.internal:8443'}
+    - {id: log-12, ts: 2026-11-02T05:12, service: cards, level: ERROR, msg: 'region=us-east connection reset by peer calling auth.cardnet.example:443'}
+    - {id: log-13, ts: 2026-11-02T05:12, service: accounts, level: ERROR, msg: 'region=us-east connection reset by peer calling kyc.internal:8080'}
+    - {id: log-14, ts: 2026-11-02T05:13, service: mobile-gateway, level: WARN, msg: 'region=us-east upstream errors from payments, cards, accounts'}
+    - {id: log-15, ts: 2026-11-02T05:15, service: ledger, level: INFO, msg: postings committed batch=500 duration=41ms}
+    - {id: log-16, ts: 2026-11-02T05:16, service: accounts, level: WARN, msg: slow query 612ms on reporting replica (threshold 500ms) query=monthly_spend_rollup}
+    - {id: log-17, ts: 2026-11-02T05:16, service: ledger, level: INFO, msg: postings committed batch=500 duration=41ms}
+    - {id: log-18, ts: 2026-11-02T05:19, service: payments, level: ERROR, msg: 'region=us-east connection reset by peer calling fraud-scoring.internal:9000'}
+    - {id: log-19, ts: 2026-11-02T05:19, service: auth, level: INFO, msg: refresh token rotated client=android}
+    - {id: log-20, ts: 2026-11-02T05:19, service: accounts, level: INFO, msg: 'GET /v1/accounts/{id}/summary 200 33ms'}
+    - {id: log-21, ts: 2026-11-02T05:21, service: notifications, level: INFO, msg: template cache warm templates=86}
+    - {id: log-22, ts: 2026-11-02T05:27, service: cards, level: INFO, msg: region=us-east authorize approved pan_token=tk_5511}
+    - {id: log-23, ts: 2026-11-02T05:29, service: accounts, level: INFO, msg: 'region=us-east GET /v1/accounts/{id}/summary 200 31ms'}
+    - {id: log-24, ts: 2026-11-02T05:31, service: accounts, level: INFO, msg: account limits cache refreshed entries=88120}
+    - {id: log-25, ts: 2026-11-02T05:32, service: accounts, level: WARN, msg: slow query 612ms on reporting replica (threshold 500ms) query=monthly_spend_rollup}
+    - {id: log-26, ts: 2026-11-02T05:37, service: notifications, level: INFO, msg: template cache warm templates=86}
+    - {id: log-27, ts: 2026-11-02T05:38, service: auth, level: INFO, msg: jwks cache refreshed keys=3}
+    metrics:
+    - {id: met-01, service: payments, metric: http_5xx_ratio, region: us-east, start: 2026-11-02T05:00, step_min: 5, values: [0.001, 0.002, 0.18, 0.21, 0.19, 0.05, 0.002, 0.001, 0.002]}
+    - {id: met-02, service: cards, metric: card_auth_error_ratio, region: us-east, start: 2026-11-02T05:00, step_min: 5, values: [0.01, 0.011, 0.24, 0.26, 0.22, 0.06, 0.012, 0.01, 0.011]}
+    - {id: met-03, service: accounts, metric: http_5xx_ratio, region: us-east, start: 2026-11-02T05:00, step_min: 5, values: [0.001, 0.001, 0.15, 0.17, 0.16, 0.04, 0.001, 0.002, 0.001]}
+    - {id: met-04, service: ledger, metric: write_latency_p99_ms, region: us-east, start: 2026-11-02T05:00, step_min: 5, values: [41, 42, 40, 43, 41, 42, 41, 40, 42]}
+    deployments: []
+    history: []
+    faults:
+    - {tool: get_dependencies, kind: error}
+    - {tool: search_incidents, kind: error}
+  truth:
+    outcome: inconclusive
+    category: unknown
+    component: ''
+    key_evidence: []

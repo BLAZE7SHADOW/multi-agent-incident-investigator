@@ -48,8 +48,8 @@ RANK = {"low": 0, "medium": 1, "high": 2}
 _TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
 
 
-def load_raw() -> tuple[list[dict], list[dict]]:
-    data = yaml.safe_load(INCIDENTS.read_text())
+def load_raw(path: Path = INCIDENTS) -> tuple[list[dict], list[dict]]:
+    data = yaml.safe_load(path.read_text())
     return data["topology"], [c for c in data["cases"] if c["truth"]["outcome"] == "conclusive"]
 
 
@@ -216,18 +216,19 @@ def shuffle_rows(raw, topology):
     return raw, topology, {}, {}
 
 
-def _noise(raw, count):
+def _noise(raw, count, hours=-2, level="INFO", msg="health check passed"):
+    """Harmless log lines on the reported service, starting `hours` from the report time."""
     raw = copy.deepcopy(raw)
     service = raw["incident"]["service"]
-    start = datetime.fromisoformat(str(raw["incident"]["reported_at"])) - timedelta(hours=2)
+    start = datetime.fromisoformat(str(raw["incident"]["reported_at"])) + timedelta(hours=hours)
     for i in range(count):
         raw["world"].setdefault("logs", []).append(
             {
                 "id": f"noise-{i:02d}",
                 "ts": (start + timedelta(minutes=i)).strftime("%Y-%m-%dT%H:%M"),
                 "service": service,
-                "level": "INFO",
-                "msg": "health check passed",
+                "level": level,
+                "msg": msg,
             }
         )
     return raw
@@ -239,6 +240,19 @@ def light_noise(raw, topology):
 
 def heavy_noise(raw, topology):
     return _noise(raw, 25), topology, {}, {}
+
+
+def newer_noise(raw, topology):
+    return _noise(raw, 25, hours=0), topology, {}, {}
+
+
+def warning_noise(raw, topology):
+    return (
+        _noise(raw, 25, level="WARN", msg="deprecated config key, using default"),
+        topology,
+        {},
+        {},
+    )
 
 
 def drop_key_row(raw, topology):
@@ -275,6 +289,8 @@ TRANSFORMS = {
     "shuffle row order": (shuffle_rows, "same"),
     "add 3 noise rows": (light_noise, "same"),
     "add 25 noise rows": (heavy_noise, "same"),
+    "add 25 noise rows after the report": (newer_noise, "same"),
+    "add 25 harmless warnings": (warning_noise, "same"),
     "drop a key evidence row": (drop_key_row, "not_more"),
     "add a contradicting row": (add_contradiction, "not_more"),
 }
@@ -296,11 +312,16 @@ def check(original: dict, changed: dict, relation: str, renames: dict) -> tuple[
     return True, ""
 
 
-def run_suite() -> list[dict]:
-    topology, cases = load_raw()
+def run_suite(path: Path = INCIDENTS) -> list[dict]:
+    topology, cases = load_raw(path)
     results = []
     for raw in cases:
         original = investigate_offline(raw, topology)
+        truth = raw["truth"]
+        solved = original["outcome"] == "conclusive" and (
+            original["category"],
+            original["component"],
+        ) == (truth["category"], truth["component"])
         for name, (transform, relation) in TRANSFORMS.items():
             changed_raw, changed_topology, renames, extra = transform(raw, topology)
             changed = investigate_offline(changed_raw, changed_topology, extra)
@@ -313,6 +334,7 @@ def run_suite() -> list[dict]:
                     "passed": passed,
                     "detail": detail,
                     "original": original,
+                    "solved": solved,
                 }
             )
     return results
@@ -320,8 +342,13 @@ def run_suite() -> list[dict]:
 
 def render(results: list[dict]) -> str:
     incidents = sorted({r["incident"] for r in results})
+    solved = sorted({r["incident"] for r in results if r["solved"]})
+    unsolved = [i for i in incidents if i not in solved]
     lines = [
         "# Metamorphic test results\n",
+        f"Unchanged cases solved: {len(solved)}/{len(incidents)}"
+        + (f" (not solved: {', '.join(unsolved)})" if unsolved else "")
+        + ".\n",
         f"{len(incidents)} incidents with a known cause, each changed {len(TRANSFORMS)} ways, "
         f"for {len(results)} checks. Runs the real tools and evidence rules, with labels from "
         "each case's key evidence. No model calls.\n",
@@ -345,9 +372,10 @@ def render(results: list[dict]) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--incidents", type=Path, default=INCIDENTS, help="test set to change")
     parser.add_argument("--out", type=Path, default=ROOT / "evals" / "results" / "metamorphic.md")
     args = parser.parse_args()
-    text = render(run_suite())
+    text = render(run_suite(args.incidents))
     args.out.write_text(text)
     print(text)
 

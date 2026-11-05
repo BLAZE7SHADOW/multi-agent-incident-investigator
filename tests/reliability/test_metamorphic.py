@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -12,6 +13,7 @@ from reliability.metamorphic import (
 )
 
 TOPOLOGY, CASES = load_raw()
+ROOT_BLIND = Path(__file__).parent.parent.parent / "data" / "blind_incidents.yaml"
 CASE = {c["incident"]["id"]: c for c in CASES}
 RESULTS = run_suite()
 
@@ -108,15 +110,19 @@ def test_confidence_rising_fails_not_more():
 
 def test_current_results_are_recorded():
     """Today's results. A change that moves these must be explained."""
+    # Before the log fix: 122/130, failing INC-04, 06, 07 and 11 on older noise and warnings.
     failures = sorted((r["incident"], r["transform"]) for r in RESULTS if not r["passed"])
-    assert failures == [
-        ("INC-04", "add 25 noise rows"),
-        ("INC-06", "add 25 noise rows"),
-        ("INC-07", "add 25 noise rows"),
-        ("INC-11", "add 25 noise rows"),
-    ]
+    assert failures == []
+
+
+def test_blind_set_results_are_recorded():
+    """Frozen blind set, scored offline. Both unsolved cases name services differently."""
+    blind = run_suite(ROOT_BLIND)
+    unsolved = sorted({r["incident"] for r in blind if not r["solved"]})
+    assert unsolved == ["BLIND-11", "BLIND-15"]
+    assert sum(r["passed"] for r in blind) == len(blind) == 18 * len(TRANSFORMS)
 
 
 def test_report_lists_failures():
     text_out = render(RESULTS)
-    assert "**106/110**" in text_out and "INC-04 | add 25 noise rows" in text_out
+    assert "**130/130**" in text_out and "## Failures\n\nNone." in text_out
