@@ -221,6 +221,31 @@ async def test_partial_fault_is_flagged_and_narrowing_reveals_more():
     assert narrow.status == "partial" and [r["id"] for r in narrow.rows] == ["b"]
 
 
+async def test_partial_fault_recovers_after_its_times():
+    rows = [{**LOG, "id": "a"}, {**LOG, "id": "b"}]
+    fault = Fault(tool="query_logs", kind="partial", times=2, max_rows=1)
+    logs = tools_for(logs=rows, faults=[fault])["query_logs"]
+    first, second, third = [await call(logs, service="api") for _ in range(3)]
+    assert [r.status for r in (first, second, third)] == ["partial", "partial", "ok"]
+    assert [len(r.rows) for r in (first, second, third)] == [1, 1, 2]
+
+
+async def test_partial_fault_without_times_never_recovers():
+    rows = [{**LOG, "id": "a"}, {**LOG, "id": "b"}]
+    fault = Fault(tool="query_logs", kind="partial", max_rows=1)
+    logs = tools_for(logs=rows, faults=[fault])["query_logs"]
+    for _ in range(5):
+        assert (await call(logs, service="api")).status == "partial"
+
+
+async def test_partial_fault_counts_calls_even_when_nothing_is_cut():
+    rows = [{**LOG, "id": "a"}]
+    fault = Fault(tool="query_logs", kind="partial", times=1, max_rows=5)
+    logs = tools_for(logs=rows, faults=[fault])["query_logs"]
+    assert (await call(logs, service="api")).status == "partial"
+    assert (await call(logs, service="api")).status == "ok"
+
+
 async def test_fault_counters_are_per_run():
     world = World(logs=[LOG], faults=[Fault(tool="query_logs", kind="timeout", times=1)])
     for _ in range(2):
