@@ -314,6 +314,7 @@ class Case(BaseModel):
     scenario: str
     provenance: Literal["synthetic", "production"] = "synthetic"
     reviewed_by: str = ""
+    tags: list[str] = Field(default=[], description="Difficulty types, for the coverage matrix")
     split: Literal["dev", "holdout"] = "dev"
     world: World
     truth: Truth
