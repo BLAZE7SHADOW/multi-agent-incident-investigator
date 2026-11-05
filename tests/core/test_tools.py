@@ -288,3 +288,8 @@ def test_core_never_imports_reliability():
             elif isinstance(node, ast.ImportFrom):
                 names = [node.module or ""]
             assert not any(n.split(".")[0] == "reliability" for n in names), path.name
+
+
+def test_technical_note_stays_within_the_assignment_limit():
+    note = Path(__file__).parent.parent.parent / "NOTE.md"
+    assert len(note.read_text().split()) <= 500
