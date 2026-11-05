@@ -7,7 +7,6 @@ from hypothesis import strategies as st
 
 from evals.scoring import score_run
 from investigator.evidence import (
-    CHANGE_KINDS,
     assess_hypothesis,
     clean_claim,
     decide_outcome,
@@ -80,8 +79,7 @@ def test_every_calculated_value_matches_its_definition(category, cited, labels, 
     expected_ratio = len(observed_cited & supporting) / len(observed_cited) if observed_cited else 0
     assert result.verified_ratio == expected_ratio
     assert 0 <= result.verified_ratio <= 1
-    counted = 0 if result.disqualified else len(supporting)
-    assert result.net_support == counted - len(contradicting)
+    assert result.net_support == len(supporting) - len(contradicting)
 
 
 @MANY
@@ -90,7 +88,7 @@ def test_confidence_levels_always_meet_their_definitions(category, cited, labels
     result = assess_hypothesis(make(category, cited), labels, LEDGER, failed)
     sources = {LEDGER[r].source for r in result.verified_supporting}
     if result.confidence in ("medium", "high"):
-        assert not result.disqualified and category != "unknown"
+        assert category != "unknown"
         assert len(sources) >= 2 and result.net_support > 0 and result.verified_ratio >= 0.5
     if result.confidence == "high":
         assert result.verified_ratio >= 0.8
@@ -117,21 +115,6 @@ def test_adding_a_contradiction_never_raises_confidence(cited, labels, row):
         make("traffic_surge", cited), {**labels, row: "contradicts"}, LEDGER, []
     )
     assert order[after.confidence] <= order[before.confidence]
-
-
-@MANY
-@given(st.sampled_from(sorted(CHANGE_KINDS)), cited_strategy, labels_strategy)
-def test_change_cause_is_never_confident_without_its_kind_of_row(category, cited, labels):
-    data = {
-        row: Evidence(
-            id=row,
-            source=e.source,
-            content=json.dumps({"id": row, "service": "api", "kind": "something_else"}),
-        )
-        for row, e in LEDGER.items()
-    }
-    result = assess_hypothesis(make(category, cited), labels, data, [])
-    assert result.confidence == "low" and result.disqualified
 
 
 @st.composite
@@ -163,13 +146,9 @@ def test_conclusive_always_means_every_condition_held(data, verdict):
     assert (outcome == "conclusive") == (not reasons)
     if outcome == "conclusive":
         top = ranked[0]
-        assert verdict == "accept" and top.confidence != "low" and not top.disqualified
-        for rival in ranked[1:]:
-            if rival.category != "unknown" and (rival.category, rival.component) != (
-                top.category,
-                top.component,
-            ):
-                assert top.net_support - rival.net_support >= 1
+        assert verdict == "accept" and top.confidence != "low"
+        if len(ranked) > 1:
+            assert top.net_support - ranked[1].net_support >= 1
 
 
 @MANY
@@ -178,7 +157,7 @@ def test_ranking_is_ordered_and_loses_nothing(data):
     hypotheses, verification = data
     ranked = rank_hypotheses(hypotheses, verification, LEDGER, [])
     assert sorted(h.id for h in ranked) == sorted(h.id for h in hypotheses)
-    keys = [(not h.disqualified, h.net_support, h.verified_ratio) for h in ranked]
+    keys = [(h.net_support, h.verified_ratio) for h in ranked]
     assert keys == sorted(keys, reverse=True)
 
 

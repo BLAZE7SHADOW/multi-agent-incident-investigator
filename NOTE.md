@@ -35,7 +35,7 @@ The sample is small: 12 incidents, 3 holdout, on one model. We tuned on dev inci
 
 ## Potential improvements
 
-1. Re-run the evaluation with the two new rules, which offline took the rule eval from 6/13 to 12/13.
+1. Find generic evidence rules, proven on blind and adversarial cases. Two rules fitted to our failures were removed.
 2. Check how long before an incident a change happened.
 3. Try one agent plus one independent checker.
 4. Weigh evidence instead of counting rows.
