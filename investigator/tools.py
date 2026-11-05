@@ -137,13 +137,16 @@ def build_tools(world: World) -> list[BaseTool]:
     def respond(tool: str, rows: list[dict[str, Any]], selected: str = "") -> str:
         fault = next((f for f in world.faults if f.tool == tool), None)
         status, note = "ok", selected or ("" if rows else "no matching rows")
-        if fault and fault.kind == "partial":
+        # `times` limits every fault kind: after that many bad calls, the tool recovers.
+        active = fault and (fault.times is None or failures[tool] < fault.times)
+        if active:
+            failures[tool] += 1
+        if active and fault.kind == "partial":
             if len(rows) > fault.max_rows:
                 note = "backend returned partial results; narrow the query to see more"
                 rows = rows[: fault.max_rows]
             status = "partial"
-        elif fault and (fault.times is None or failures[tool] < fault.times):
-            failures[tool] += 1
+        elif active:
             raise ToolFault(tool, fault.kind)
         truncated = bool(selected) or len(rows) > MAX_ROWS
         return wrap_untrusted(
