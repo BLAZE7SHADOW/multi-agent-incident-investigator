@@ -185,3 +185,13 @@ def test_report_compares_both_systems_and_splits():
 def test_scores_survive_json():
     adapter = TypeAdapter(RunScore)
     assert adapter.validate_json(adapter.dump_json(score())) == score()
+
+
+def test_blind_set_loads_through_the_same_loader():
+    from pathlib import Path
+
+    from investigator.tools import load_cases
+
+    blind = load_cases(Path(__file__).parent.parent.parent / "data" / "blind_incidents.yaml")
+    assert len(blind) == 24 and all(c.split == "holdout" for c in blind)
+    assert all(c.world.dependencies for c in blind)

@@ -101,13 +101,17 @@ async def main() -> None:
     parser.add_argument("--cases", nargs="*", help="incident ids; default is all")
     parser.add_argument("--systems", nargs="*", default=list(SYSTEMS), choices=list(SYSTEMS))
     parser.add_argument("--golden", action="store_true", help="also run reviewed golden cases")
+    parser.add_argument("--incidents", type=Path, help="a different test set, e.g. the blind set")
     parser.add_argument("--concurrency", type=int, default=3)
     parser.add_argument("--max-tokens", type=int, default=2_000_000, help="stop starting new runs")
     parser.add_argument("--out", type=Path, default=RESULTS)
     parser.add_argument("--model", default="", help="label for the report; default is from .env")
     args = parser.parse_args()
 
-    source = load_golden() if args.golden else load_cases()
+    if args.incidents:
+        source = load_cases(args.incidents)
+    else:
+        source = load_golden() if args.golden else load_cases()
     cases = [c for c in source if not args.cases or c.incident.id in args.cases]
     jobs = [(c, s, r) for c in cases for s in args.systems for r in range(args.repeats)]
     gate = asyncio.Semaphore(args.concurrency)
