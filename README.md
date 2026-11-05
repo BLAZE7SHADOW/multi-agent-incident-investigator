@@ -286,6 +286,10 @@ uv run python -m evals --golden --repeats 3    # makes paid model calls
 
 A case is refused if no reviewer is named, if secrets or email addresses remain, if its ID already exists, or if its answer is incomplete. Reviewed cases go in [`data/golden_extra.yaml`](data/golden_extra.yaml), which is empty for now. The 12 assignment incidents stay frozen, so the reported results remain comparable. Use `--golden` only with a baseline created from a golden run.
 
+## Continuous integration
+
+GitHub Actions runs lint, format checks and all tests on every push. See `.github/workflows/ci.yml`. It uses fake models, so it needs no API key and makes no model calls.
+
 ## Project layout
 
 ```
@@ -326,7 +330,6 @@ The core does not import the extras, and a test enforces this. `cli.py` and `eva
 - Tokens from failed model calls are not counted.
 - Secret detection uses patterns, so it can miss other formats. The risky-action flag uses keywords.
 - Only Gemini was run for real. Anthropic was only checked offline, and OpenAI was not tested.
-- CI is defined in `.github/workflows/ci.yml` but has not run, because the repo has no remote.
 - The mock data is much simpler than real telemetry.
 
 ## External dependencies
