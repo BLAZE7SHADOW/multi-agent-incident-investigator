@@ -52,6 +52,7 @@ A free Gemini key may not be enough. One run made 3 to 23 model requests in our 
 | Check for regressions | `uv run python -m reliability.regression` | No |
 | Score the evidence rules alone | `uv run python -m reliability.rule_eval` | No |
 | Recalculate every saved score | `uv run python -m reliability.audit` | No |
+| Run metamorphic robustness tests | `uv run python -m reliability.metamorphic` | No |
 
 The full comparison makes 72 runs, used about 1.5M tokens, and stops starting new runs at 2M tokens. It writes to `evals/results/`.
 
@@ -254,6 +255,31 @@ On the 13 cases they were designed from, correct results rose from 6 to 12. On 8
 All 21 scenarios together: precision 62%, recall 67%, 6 wrong conclusions. Full detail: [`rule_eval.md`](evals/results/rule_eval.md).
 
 The developer wrote the expected answers, so treat these as evidence, not proof.
+
+### Metamorphic tests
+
+`reliability.metamorphic` changes each incident in a way that should not change the answer, then checks the answer did not change. It runs the real tools and evidence rules, with labels from each case's key evidence. No model calls are made, and nobody picks the expected answers: they come from the unchanged incident.
+
+| Change | Should | Passed |
+|---|---|---|
+| Rename every service | Not change the answer | 10/10 |
+| Rename metrics, such as `error_rate` to `http_5xx_ratio` | Not change the answer | 10/10 |
+| Rename change kinds, such as `deploy` to `release` | Not change the answer | 10/10 |
+| Deploy tool uses other service names | Not change the answer | 10/10 |
+| Rename row IDs | Not change the answer | 10/10 |
+| Shift all times by 400 days | Not change the answer | 10/10 |
+| Shuffle row order | Not change the answer | 10/10 |
+| Add 3 harmless log rows | Not change the answer | 10/10 |
+| Add 25 harmless log rows | Not change the answer | **6/10** |
+| Drop a key evidence row | Not raise confidence | 10/10 |
+| Add a contradicting row | Not raise confidence | 10/10 |
+| **Total** | | **106/110** |
+
+**The suite catches overfitting.** Run against the removed rules, it scores 100/110. Those rules fail when change kinds are renamed, or when the deploy tool names services differently.
+
+**It found one real weakness.** The log tool returns the oldest rows first and stops at 20. With 25 harmless older rows, the key evidence is cut off, and 4 incidents lose their right answer. Real log tools usually return the newest rows first. This is not fixed yet.
+
+Limits: 10 incidents, oracle labels instead of a real Verifier, and one hypothesis per case, so ties are not tested here. Full detail: [`metamorphic.md`](evals/results/metamorphic.md).
 
 ### How the calculations are checked
 
