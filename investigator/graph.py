@@ -141,7 +141,7 @@ def _unique(items: Sequence[str]) -> list[str]:
     return list(dict.fromkeys(items))
 
 
-def _fallback_draft(
+def fallback_draft(
     ranked: Sequence[RankedHypothesis],
     outcome: Outcome,
     reasons: Sequence[str],
@@ -165,6 +165,44 @@ def _fallback_draft(
         hypothesis_id="",
     )
     return ReportDraft(summary=f"Inconclusive: {why}.", actions=[action])
+
+
+def assemble_report(
+    state: InvestigationState,
+    ranked: list[RankedHypothesis],
+    outcome: Outcome,
+    reasons: list[str],
+    draft: ReportDraft,
+    budget: RunBudget,
+    action_policy: ActionPolicy | None = None,
+    extra_gaps: Sequence[str] = (),
+) -> Report:
+    """Build the final report. Everything but the summary and actions text is decided by code."""
+    claims: list[Claim] = [
+        claim for task in state["tasks"].values() if task.finding for claim in task.finding.claims
+    ]
+    assumed = [
+        Claim(text=text, kind="assumption", evidence_ids=[])
+        for hypothesis in ranked
+        for text in hypothesis.assumptions
+    ]
+    actions = clean_actions(draft.actions, ranked, outcome)
+    return Report(
+        incident_id=state["incident"].id,
+        outcome=outcome,
+        outcome_reasons=reasons,
+        stop_reason=state.get("stop_reason", ""),
+        summary=draft.summary,
+        hypotheses=ranked,
+        facts=[c for c in claims if c.kind == "fact"],
+        inferences=[c for c in claims if c.kind == "inference"],
+        assumptions=[*(c for c in claims if c.kind == "assumption"), *assumed],
+        gaps=_unique([*state.get("gaps", []), *extra_gaps]),
+        actions=action_policy(actions) if action_policy else actions,
+        usage=budget.usage,
+        usage_by_agent=budget.by_agent,
+        grounding=state.get("grounding", schemas.Grounding()),
+    )
 
 
 def build_graph(
@@ -362,61 +400,26 @@ def build_graph(
     def after_critic(state: InvestigationState) -> str:
         return "finalize" if state.get("stop_reason") else "orchestrate"
 
-    def _report_update(
-        state: InvestigationState,
-        ranked: list[RankedHypothesis],
-        outcome: Outcome,
-        reasons: list[str],
-        draft: ReportDraft,
-        extra_gaps: Sequence[str] = (),
-    ) -> dict:
-        claims: list[Claim] = [
-            claim
-            for task in state["tasks"].values()
-            if task.finding
-            for claim in task.finding.claims
-        ]
-        assumed = [
-            Claim(text=text, kind="assumption", evidence_ids=[])
-            for hypothesis in ranked
-            for text in hypothesis.assumptions
-        ]
-        actions = clean_actions(draft.actions, ranked, outcome)
-        report = Report(
-            incident_id=state["incident"].id,
-            outcome=outcome,
-            outcome_reasons=reasons,
-            stop_reason=state.get("stop_reason", ""),
-            summary=draft.summary,
-            hypotheses=ranked,
-            facts=[c for c in claims if c.kind == "fact"],
-            inferences=[c for c in claims if c.kind == "inference"],
-            assumptions=[*(c for c in claims if c.kind == "assumption"), *assumed],
-            gaps=_unique([*state.get("gaps", []), *extra_gaps]),
-            actions=action_policy(actions) if action_policy else actions,
-            usage=budget.usage,
-            usage_by_agent=budget.by_agent,
-            grounding=state.get("grounding", schemas.Grounding()),
-        )
-        return {"report": report, "usage": budget.usage, "trace": [f"reporting: {outcome}"]}
-
     async def finalize(state: InvestigationState) -> dict:
         ranked = _ranked(state)
         outcome, reasons = decide_outcome(ranked, state.get("critique"))
         gaps = state.get("gaps", [])
         if budget.stop_reason():
-            draft = _fallback_draft(ranked, outcome, reasons, gaps)
+            draft = fallback_draft(ranked, outcome, reasons, gaps)
         else:
             draft = await agents.report(state["incident"], ranked, outcome, reasons, gaps)
-        return _report_update(state, ranked, outcome, reasons, draft)
+        report = assemble_report(state, ranked, outcome, reasons, draft, budget, action_policy)
+        return {"report": report, "usage": budget.usage, "trace": [f"reporting: {outcome}"]}
 
     def finalize_failed(state: InvestigationState, error: NodeError) -> Command:
         ranked = _ranked(state)
         outcome, reasons = decide_outcome(ranked, state.get("critique"))
-        draft = _fallback_draft(ranked, outcome, reasons, state.get("gaps", []))
+        draft = fallback_draft(ranked, outcome, reasons, state.get("gaps", []))
         gap = f"report writer failed: {type(error.error).__name__}"
-        update = _report_update(state, ranked, outcome, reasons, draft, [gap])
-        return Command(update=update, goto=END)
+        report = assemble_report(
+            state, ranked, outcome, reasons, draft, budget, action_policy, [gap]
+        )
+        return Command(update={"report": report, "usage": budget.usage}, goto=END)
 
     # No retry policy here: tools and models retry inside agents, keeping evidence already gathered.
     guarded = {"timeout": limits.node_timeout_s}

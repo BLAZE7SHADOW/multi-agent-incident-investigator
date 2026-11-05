@@ -5,6 +5,7 @@ from pathlib import Path
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from investigator.agents import LLMAgents
+from investigator.baseline import investigate_baseline
 from investigator.budget import RunBudget
 from investigator.graph import investigate
 from investigator.llm import load_model
@@ -37,4 +38,21 @@ async def run_incident(
         thread_id=thread_id,
         action_policy=flag_risky_actions,
         resume=resume,
+    )
+
+
+async def run_baseline(
+    incident: Incident,
+    world: World,
+    model: BaseChatModel | None = None,
+    limits: Limits | None = None,
+) -> Report:
+    """The comparison system, with the same safety extras as `run_incident`."""
+    return await investigate_baseline(
+        incident,
+        model or load_model(),
+        build_tools(world),
+        RunBudget(limits),
+        extra_middleware=redaction_middleware(),
+        action_policy=flag_risky_actions,
     )

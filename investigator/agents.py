@@ -112,8 +112,9 @@ the effect, or the suspected component was healthy.
 - symptom: this row shows only generic effects any cause could produce, for example a raised \
 error rate, higher latency, or a generic server error with no detail.
 
-Omit rows that are irrelevant to the hypothesis. Judge each row on what it says, not on how \
-certain you are about the hypothesis as a whole.
+Service dependency rows and past incidents describe the system and its history, not this \
+incident, so omit them. Omit rows that are irrelevant to the hypothesis. Judge each row on what \
+it says, not on how certain you are about the hypothesis as a whole.
 
 {_UNTRUSTED}"""
 

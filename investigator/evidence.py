@@ -30,6 +30,10 @@ MEDIUM_VERIFIED_RATIO = 0.5
 MIN_SOURCES = 2
 MIN_LEAD = 1
 
+# What happened during this incident. Topology and past incidents are useful leads, but they exist
+# whatever the cause, so they can never count for or against a hypothesis.
+OBSERVATIONS: frozenset[Source] = frozenset({"logs", "metrics", "deployments"})
+
 _TOOL_SOURCE: dict[str, Source] = {
     "query_logs": "logs",
     "query_metrics": "metrics",
@@ -140,9 +144,10 @@ def assess_hypothesis(
     failed_tools: Iterable[str],
 ) -> RankedHypothesis:
     """Compute a hypothesis's standing from Verifier labels. Unlabelled rows count for nothing."""
-    supporting = sorted(row for row, label in labels.items() if label == "supports")
-    contradicting = sorted(row for row, label in labels.items() if label == "contradicts")
-    cited = set(hypothesis.supporting)
+    observed = {row: label for row, label in labels.items() if ledger[row].source in OBSERVATIONS}
+    supporting = sorted(row for row, label in observed.items() if label == "supports")
+    contradicting = sorted(row for row, label in observed.items() if label == "contradicts")
+    cited = {row for row in hypothesis.supporting if ledger[row].source in OBSERVATIONS}
     verified_ratio = len(cited & set(supporting)) / len(cited) if cited else 0.0
     sources = {ledger[row].source for row in supporting}
     net_support = len(supporting) - len(contradicting)
