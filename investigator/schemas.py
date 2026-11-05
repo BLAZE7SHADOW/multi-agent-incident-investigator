@@ -27,20 +27,20 @@ RowLabel = Literal["supports", "contradicts", "symptom", "irrelevant"]
 
 
 class Limits(BaseModel):
-    max_rounds: int = 3
-    max_tool_calls: int = 40
-    max_tokens: int = 200_000
+    max_rounds: int = 2
+    max_tool_calls: int = 25
+    max_tokens: int = 80_000
     max_seconds: float = 300
-    max_task_steps: int = 6
-    max_task_tool_calls: int = 8
-    max_task_attempts: int = 2
-    max_tasks_per_round: int = 6
+    max_task_steps: int = 4
+    max_task_tool_calls: int = 5
+    max_tasks_per_round: int = 4
     node_timeout_s: float = 120
 
 
 class Usage(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
+    thinking_tokens: int = Field(default=0, description="Part of output_tokens")
     llm_calls: int = 0
     tool_calls: int = 0
 
@@ -212,6 +212,7 @@ class Report(BaseModel):
     gaps: list[str]
     actions: list[RecommendedAction]
     usage: Usage
+    usage_by_agent: dict[str, Usage] = {}
     grounding: Grounding = Grounding()
     outcome_reasons: list[str] = []
     inferences: list[Claim] = []

@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from investigator.budget import RunBudget
 from investigator.evidence import collect_evidence
 from investigator.graph import TaskOutcome, investigate
-from investigator.llm import BudgetExhausted
+from investigator.llm import BudgetExhausted, model_retry
 from investigator.schemas import (
     Claim,
     Critique,
@@ -183,7 +183,7 @@ async def test_critic_feedback_starts_a_new_round_with_more_evidence():
     ("critiques", "limits", "new_rows", "expected", "rounds"),
     [
         ([MORE] * 9, Limits(max_rounds=2), True, "max_rounds_reached", 2),
-        ([MORE] * 9, Limits(), False, "no_new_evidence", 2),
+        ([MORE] * 9, Limits(max_rounds=3), False, "no_new_evidence", 2),
         (
             [Critique(verdict="insufficient", objections=[], requests=[])],
             Limits(),
@@ -290,20 +290,13 @@ async def test_made_up_rows_in_verifier_labels_cannot_create_support():
 # --- Recovery from failures ---
 
 
-async def test_failed_task_is_retried_then_investigation_continues():
+async def test_failed_task_is_not_rerun_and_investigation_continues():
     agents = StubAgents(fail={"r1-dep": ConnectionError("down")})
     report = await run(agents)
-    starts = [event for event in agents.events if event == ("start", "r1-dep")]
-    assert len(starts) == Limits().max_task_attempts
+    assert agents.events.count(("start", "r1-dep")) == 1
     assert any("r1-dep failed: ConnectionError" in gap for gap in report.gaps)
     assert {c.text for c in report.facts} == {"fact r1-obs"}
     assert report.hypotheses[0].confidence == "low"
-
-
-async def test_permanent_error_is_not_retried():
-    agents = StubAgents(fail={"r1-dep": ValueError("bad")})
-    await run(agents)
-    assert len([e for e in agents.events if e == ("start", "r1-dep")]) == 1
 
 
 async def test_dependent_task_still_runs_when_its_dependency_failed():
@@ -528,3 +521,76 @@ async def test_shared_budget_applies_across_agents():
         _, agent = budgeted_agent(budget, reply("Done", {"summary": "x"}))
         await agent.ainvoke(PROMPT, {"callbacks": [budget]})
     assert budget.usage.llm_calls == 2
+
+
+async def test_usage_is_split_by_agent_and_thinking_is_counted():
+    budget = RunBudget()
+    message = reply("Done", {"summary": "x"})
+    message.usage_metadata["output_token_details"] = {"reasoning": 3}
+    model = ScriptedChatModel(script=[message])
+    agent = create_agent(model, [], response_format=Done, name="critic")
+    await agent.ainvoke(PROMPT, {"callbacks": [budget]})
+    assert budget.by_agent["critic"] == Usage(
+        input_tokens=10, output_tokens=5, thinking_tokens=3, llm_calls=1
+    )
+    assert budget.usage.thinking_tokens == 3
+
+
+class QuotaError(Exception):
+    def __str__(self):
+        return "429 RESOURCE_EXHAUSTED GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+
+
+async def test_daily_quota_stops_the_run_and_is_not_retried():
+    budget = RunBudget()
+    model = ScriptedChatModel(script=[QuotaError(), reply("Done", {"summary": "x"})])
+    agent = create_agent(
+        model,
+        [],
+        response_format=Done,
+        middleware=[budget.middleware(), model_retry(initial_delay=0)],
+    )
+    with pytest.raises(QuotaError):
+        await agent.ainvoke(PROMPT, {"callbacks": [budget]})
+    assert len(model.script) == 1
+    assert budget.stop_reason() == "provider_quota_exhausted"
+
+
+async def test_later_unrelated_error_does_not_clear_the_quota_flag():
+    """A parallel task already inside its model call can fail after the quota flag is set."""
+    budget = RunBudget()
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def slow_failure(request):
+        entered.set()
+        await release.wait()
+        raise ValueError("unrelated")
+
+    async def quota_failure(request):
+        raise QuotaError()
+
+    middleware = budget.middleware()
+    slow = asyncio.create_task(middleware.awrap_model_call(None, slow_failure))
+    await entered.wait()
+    with pytest.raises(QuotaError):
+        await middleware.awrap_model_call(None, quota_failure)
+    release.set()
+    with pytest.raises(ValueError):
+        await slow
+    assert budget.stop_reason() == "provider_quota_exhausted"
+
+
+@pytest.mark.parametrize("node", ["plan", "reason", "criticize"])
+async def test_quota_exhaustion_is_reported_rather_than_looking_inconclusive(node):
+    budget = RunBudget()
+
+    class QuotaAgents(StubAgents):
+        def _enter(self, name):
+            if name == node:
+                budget.quota_exhausted = True
+            super()._enter(name)
+
+    agents = QuotaAgents(fail={node: QuotaError()})
+    report = await investigate(INCIDENT, agents, budget)
+    assert report.stop_reason == "provider_quota_exhausted"
+    assert agents.calls["report"] == 0

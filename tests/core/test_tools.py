@@ -92,14 +92,17 @@ async def test_logs_filter_by_service_level_text_and_window():
     assert (empty.status, empty.rows, empty.note) == ("ok", [], "no matching rows")
 
 
-async def test_metrics_expand_points_and_respect_the_window():
+async def test_metrics_are_compact_and_respect_the_window():
     metrics = tools_for(metrics=[METRIC])["query_metrics"]
     [row] = (await call(metrics, service="api", start="2026-01-01T10:05")).rows
-    assert row["points"] == [
-        {"ts": "2026-01-01T10:05", "value": 2},
-        {"ts": "2026-01-01T10:10", "value": 3},
-    ]
+    assert (row["start"], row["step_min"], row["values"]) == ("2026-01-01T10:05", 5, [2, 3])
     assert (await call(metrics, service="api", region="eu")).rows == []
+    assert (await call(metrics, service="api", start="2027-01-01T00:00")).rows == []
+
+
+async def test_empty_fields_are_left_out_of_tool_output():
+    raw = await tools_for(logs=[LOG])["query_logs"].ainvoke({"service": "api"})
+    assert "truncated" not in raw and '"note"' not in raw
 
 
 async def test_dependencies_return_both_directions():

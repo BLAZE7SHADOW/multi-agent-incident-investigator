@@ -43,7 +43,7 @@ def load_cases(path: Path = INCIDENTS_PATH) -> list[Case]:
 
 def wrap_untrusted(result: ToolResult) -> str:
     """Mark tool output as data. Escaping `<` stops a log line closing the wrapper early."""
-    body = result.model_dump_json().replace("<", "\\u003c")
+    body = result.model_dump_json(exclude_defaults=True).replace("<", "\\u003c")
     return f"<untrusted_data>{body}</untrusted_data>"
 
 
@@ -98,14 +98,17 @@ def _in_window(ts: str, start: str, end: str) -> bool:
     return (not start or ts >= start) and (not end or ts <= end)
 
 
-def _metric_points(row: dict[str, Any], start: str, end: str) -> list[dict[str, Any]]:
+def _metric_window(row: dict[str, Any], start: str, end: str) -> dict[str, Any] | None:
+    """A series as start, step and values, far smaller than timestamping every point."""
     first = datetime.fromisoformat(row["start"])
-    points = []
-    for index, value in enumerate(row["values"]):
-        ts = (first + timedelta(minutes=index * row["step_min"])).strftime("%Y-%m-%dT%H:%M")
-        if _in_window(ts, start, end):
-            points.append({"ts": ts, "value": value})
-    return points
+    points = [
+        ((first + timedelta(minutes=i * row["step_min"])).strftime("%Y-%m-%dT%H:%M"), value)
+        for i, value in enumerate(row["values"])
+    ]
+    window = [(ts, value) for ts, value in points if _in_window(ts, start, end)]
+    if not window:
+        return None
+    return {**row, "start": window[0][0], "values": [value for _, value in window]}
 
 
 def build_tools(world: World) -> list[BaseTool]:
@@ -153,10 +156,9 @@ def build_tools(world: World) -> list[BaseTool]:
                 continue
             if region and row.get("region") != region:
                 continue
-            points = _metric_points(row, start, end)
-            if points:
-                fields = {k: v for k, v in row.items() if k not in ("start", "step_min", "values")}
-                rows.append({**fields, "points": points})
+            window = _metric_window(row, start, end)
+            if window:
+                rows.append(window)
         return respond("query_metrics", rows)
 
     def get_deployments(service: str = "", start: str = "", end: str = "") -> str:

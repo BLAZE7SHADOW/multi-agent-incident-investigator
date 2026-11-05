@@ -1,5 +1,6 @@
 """Evidence rules required for every conclusion. LLMs judge meaning; this code decides."""
 
+import json
 from collections.abc import Iterable, Mapping, Sequence
 
 from langchain_core.messages import BaseMessage
@@ -57,7 +58,7 @@ def collect_evidence(
             continue
         for row in result.rows:
             evidence[row["id"]] = Evidence(
-                id=row["id"], source=_TOOL_SOURCE[result.tool], content=str(row)
+                id=row["id"], source=_TOOL_SOURCE[result.tool], content=json.dumps(row)
             )
         if result.status in ("timeout", "error"):
             failed.append(result.tool)

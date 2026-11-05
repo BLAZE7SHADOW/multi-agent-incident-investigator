@@ -1,6 +1,7 @@
 import pytest
 from fakes import ScriptedChatModel, reply
 from langchain.agents import create_agent
+from langchain_core.messages import HumanMessage
 
 from investigator.llm import is_transient, load_model, model_retry
 from investigator.schemas import Plan
@@ -42,7 +43,7 @@ async def test_transient_error_is_retried():
 
 
 async def test_retries_are_bounded_and_failure_is_raised():
-    model, agent = make_agent(*[StatusError(503)] * 3, reply("Plan", VALID_PLAN))
+    model, agent = make_agent(*[StatusError(503)] * 4, reply("Plan", VALID_PLAN))
     with pytest.raises(StatusError):
         await agent.ainvoke(PROMPT)
     assert len(model.script) == 1
@@ -62,6 +63,9 @@ async def test_permanent_error_is_not_retried():
         (StatusError(429), True),
         (StatusError(500), True),
         (Exception("provider connection error"), True),
+        (Exception("429 quota exceeded per minute, check billing"), True),
+        (Exception("429 GenerateRequestsPerDayPerProjectPerModel-FreeTier"), False),
+        (Exception("insufficient_quota"), False),
         (StatusError(401), False),
         (ValueError("bad schema"), False),
     ],
@@ -91,3 +95,25 @@ def test_provider_is_chosen_by_env_without_a_network_call(
     monkeypatch.setenv("AI_MODEL", model)
     monkeypatch.setenv(key, "test-key")
     assert type(load_model()).__name__ == client
+
+
+def gemini_env(monkeypatch):
+    monkeypatch.setenv("AI_PROVIDER", "gemini")
+    monkeypatch.setenv("AI_MODEL", "gemini-3.6-flash")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+
+
+def test_only_our_middleware_retries(monkeypatch):
+    gemini_env(monkeypatch)
+    assert load_model().max_retries == 1  # the Google SDK's value for a single attempt
+
+
+@pytest.mark.parametrize(("env", "expected"), [(None, "LOW"), ("high", "HIGH")])
+def test_gemini_thinking_defaults_to_low_and_is_configurable(monkeypatch, env, expected):
+    gemini_env(monkeypatch)
+    if env:
+        monkeypatch.setenv("AI_THINKING", env)
+    else:
+        monkeypatch.delenv("AI_THINKING", raising=False)
+    request = load_model()._prepare_request([HumanMessage("x")])
+    assert expected in str(request["config"].thinking_config.thinking_level)

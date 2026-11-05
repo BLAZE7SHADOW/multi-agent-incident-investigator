@@ -38,8 +38,14 @@ def render(report: Report) -> str:
     usage = report.usage
     lines.append(
         f"\nUsage: {usage.tool_calls} tool calls, {usage.llm_calls} LLM calls, "
-        f"{usage.total_tokens} tokens. Citation validity: {report.grounding.validity:.0%}"
+        f"{usage.total_tokens} tokens ({usage.thinking_tokens} thinking). "
+        f"Citation validity: {report.grounding.validity:.0%}"
     )
+    for agent, spent in sorted(report.usage_by_agent.items(), key=lambda a: -a[1].total_tokens):
+        lines.append(
+            f"  {agent:14} {spent.llm_calls:>3} calls  {spent.input_tokens:>6} in  "
+            f"{spent.output_tokens:>6} out  {spent.thinking_tokens:>6} thinking"
+        )
     return "\n".join(lines)
 
 
