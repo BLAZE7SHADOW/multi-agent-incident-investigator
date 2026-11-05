@@ -51,6 +51,28 @@ A free Gemini key may not be enough. One run made 3 to 23 model requests in our 
 
 The full comparison makes 72 runs, used about 1.5M tokens, and stops starting new runs at 2M tokens. It writes to `evals/results/`.
 
+A shortened report from a real run:
+
+```
+Outcome: CONCLUSIVE (stopped: critic_accepted)
+
+Hypotheses:
+  1. [high] Deployment v2.4.0 of payments service introduced a bug in
+     ChargeHandler.applyDiscount causing NullPointerExceptions. (bad_deploy, payments)
+     supports: ['dep-01', 'log-02', 'log-03']  contradicts: []
+     verified ratio: 1.00  net support: 3
+  2. [low] Payvendor API failure caused payments service to crash. (dependency_failure, payvendor)
+     supports: []  contradicts: []
+     verified ratio: 0.00  net support: 0
+
+Facts: 5  Inferences: 2
+Assumptions: 3
+Actions:
+  - Roll back the payments service deployment v2.4.0. [needs approval]
+
+Usage: 7 tool calls, 11 LLM calls, 15486 tokens (1297 thinking). Citation validity: 100%
+```
+
 ## Architecture
 
 ```mermaid
@@ -235,6 +257,7 @@ The core does not import the extras, and a test enforces this. `cli.py` and `eva
 - The multi-agent system lost the comparison. Known problems are ties between hypotheses, and concluding the wrong cause with high confidence on INC-12.
 - INC-07 fails in both systems on low confidence. The cause is not diagnosed.
 - A Verifier label is an LLM judgement, so it can be wrong. Confidence labels are not calibrated.
+- Summaries and action text are not checked against evidence. In one real run, an action named a version number that is not in the data. Hypotheses, ranking and the outcome are checked.
 - Rows are counted, not weighed. Repeated log lines can outweigh one decisive metric.
 - A task that fails loses the evidence it had gathered.
 - After a resume, the time limit restarts and the per-agent token split is incomplete.
