@@ -1,0 +1,70 @@
+{
+ "baseline": {
+  "summary": {
+   "runs": 36,
+   "invalid_runs": 0,
+   "accuracy": 0.8888888888888888,
+   "wrong_conclusion_rate": 0,
+   "missed_conclusion_rate": 0.1111111111111111,
+   "trap_rate": 0,
+   "citation_validity": 1.0,
+   "evidence_precision": 0.8347222222222223,
+   "evidence_recall": 0.8111111111111111,
+   "downgraded_claims": 0.05555555555555555,
+   "tool_calls": 12.13888888888889,
+   "llm_calls": 5.305555555555555,
+   "total_tokens": 18265.555555555555,
+   "thinking_tokens": 1374.111111111111,
+   "latency_s": 26.603157415502615,
+   "latency_median_s": 23.177823458012426
+  },
+  "incidents": {
+   "INC-01": 1,
+   "INC-02": 1,
+   "INC-03": 1,
+   "INC-04": 1,
+   "INC-05": 1,
+   "INC-06": 1,
+   "INC-07": 0,
+   "INC-08": 1,
+   "INC-09": 0.6666666666666666,
+   "INC-10": 1,
+   "INC-11": 1,
+   "INC-12": 1
+  }
+ },
+ "multi_agent": {
+  "summary": {
+   "runs": 36,
+   "invalid_runs": 0,
+   "accuracy": 0.6944444444444444,
+   "wrong_conclusion_rate": 0.05555555555555555,
+   "missed_conclusion_rate": 0.25,
+   "trap_rate": 0.05555555555555555,
+   "citation_validity": 1.0,
+   "evidence_precision": 0.6862301587301587,
+   "evidence_recall": 0.8555555555555555,
+   "downgraded_claims": 1.3333333333333333,
+   "tool_calls": 11.166666666666666,
+   "llm_calls": 15,
+   "total_tokens": 24303.166666666668,
+   "thinking_tokens": 3046.6388888888887,
+   "latency_s": 45.31931475805565,
+   "latency_median_s": 42.86448206254863
+  },
+  "incidents": {
+   "INC-01": 1,
+   "INC-02": 1,
+   "INC-03": 1,
+   "INC-04": 1,
+   "INC-05": 1,
+   "INC-06": 1,
+   "INC-07": 0,
+   "INC-08": 1,
+   "INC-09": 0,
+   "INC-10": 1,
+   "INC-11": 0.3333333333333333,
+   "INC-12": 0
+  }
+ }
+}

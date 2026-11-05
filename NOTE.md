@@ -31,7 +31,7 @@ We kept these results as measured. Tuning until multi-agent won would make the c
 
 ## Limitations
 
-The sample is small: 12 incidents, 3 holdout, on one model. We tuned on dev incidents after seeing results. The baseline's prompt used lessons from the multi-agent system, and it got more turns. Mock data is simpler than real telemetry. Confidence labels are not calibrated.
+The sample is small: 12 incidents, 3 holdout, on one model. We tuned on dev incidents after seeing results. The baseline's prompt used lessons from the multi-agent system, and it got more turns. Mock data is simpler than real telemetry. Calibration showed high confidence was never more reliable than medium.
 
 ## Potential improvements
 
@@ -40,4 +40,4 @@ The sample is small: 12 incidents, 3 holdout, on one model. We tuned on dev inci
 3. Try one agent plus one independent checker.
 4. Weigh evidence instead of counting rows.
 5. Add new unseen incidents, since the holdout has been used.
-6. Add a regression gate, a reviewed golden dataset and calibration tracking.
+6. Fill the golden dataset with reviewed production findings.

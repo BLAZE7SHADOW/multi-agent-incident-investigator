@@ -202,6 +202,8 @@ def assemble_report(
         usage=budget.usage,
         usage_by_agent=budget.by_agent,
         grounding=state.get("grounding", schemas.Grounding()),
+        incident=state["incident"],
+        evidence=list(state.get("evidence", {}).values()),
     )
 
 

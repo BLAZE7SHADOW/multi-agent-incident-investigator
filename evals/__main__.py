@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from evals.scoring import RunScore, score_run, summarize
 from investigator.schemas import Case
 from investigator.tools import load_cases
+from reliability.golden import load_golden
 from reliability.runtime import run_baseline, run_incident
 
 SYSTEMS = {"multi_agent": run_incident, "baseline": run_baseline}
@@ -99,13 +100,15 @@ async def main() -> None:
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--cases", nargs="*", help="incident ids; default is all")
     parser.add_argument("--systems", nargs="*", default=list(SYSTEMS), choices=list(SYSTEMS))
+    parser.add_argument("--golden", action="store_true", help="also run reviewed golden cases")
     parser.add_argument("--concurrency", type=int, default=3)
     parser.add_argument("--max-tokens", type=int, default=2_000_000, help="stop starting new runs")
     parser.add_argument("--out", type=Path, default=RESULTS)
     parser.add_argument("--model", default="", help="label for the report; default is from .env")
     args = parser.parse_args()
 
-    cases = [c for c in load_cases() if not args.cases or c.incident.id in args.cases]
+    source = load_golden() if args.golden else load_cases()
+    cases = [c for c in source if not args.cases or c.incident.id in args.cases]
     jobs = [(c, s, r) for c in cases for s in args.systems for r in range(args.repeats)]
     gate = asyncio.Semaphore(args.concurrency)
     scores: list[RunScore] = []

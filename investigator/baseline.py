@@ -113,6 +113,7 @@ async def investigate_baseline(
         return assemble_report(state, ranked, outcome, reasons, draft, budget, action_policy)
 
     ledger, gaps, failed = collect_evidence(result["messages"])
+    state["evidence"] = ledger
     output: BaselineOutput | None = result.get("structured_response")
     if output is None:
         state.update(stop_reason="step_limit_reached", gaps=[*gaps, "agent reached its step limit"])
