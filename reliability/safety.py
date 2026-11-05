@@ -10,11 +10,17 @@ from investigator.schemas import RecommendedAction
 _SECRET = re.compile(
     r"\b(?:sk-[A-Za-z0-9_-]{8,}|AKIA[0-9A-Z]{16})\b|\b(?:password|token|api_key)=[^\s\"',]+"
 )
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 _RISKY_ACTION = re.compile(
     r"\b(rollback|roll back|revert|restart|redeploy|delete|drop|disable|failover|fail over"
     r"|scale|migrate|rotate|purge|flush|kill|terminate|shut ?down)",
     re.IGNORECASE,
 )
+
+
+def find_sensitive(text: str) -> list[str]:
+    """Secrets and email addresses left in text, for checks before data is stored."""
+    return [m.group() for pattern in (_SECRET, _EMAIL) for m in pattern.finditer(text)]
 
 
 def _detect_secrets(text: str) -> list[PIIMatch]:

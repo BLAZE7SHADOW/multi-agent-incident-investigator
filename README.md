@@ -48,6 +48,8 @@ A free Gemini key may not be enough. One run made 3 to 23 model requests in our 
 | Continue a crashed run | `uv run python cli.py INC-01 --resume <thread>` | Yes |
 | Run the full comparison | `uv run python -m evals --repeats 3` | Yes |
 | Run a small comparison | `uv run python -m evals --repeats 1 --cases INC-01 INC-08` | Yes |
+| Calibration and cost report | `uv run python -m reliability.analysis` | No |
+| Check for regressions | `uv run python -m reliability.regression` | No |
 
 The full comparison makes 72 runs, used about 1.5M tokens, and stops starting new runs at 2M tokens. It writes to `evals/results/`.
 
@@ -228,13 +230,69 @@ Raw data: [`results.md`](evals/results/results.md) and [`results.json`](evals/re
 | Technical note, 500 words or fewer | [NOTE.md](NOTE.md) | |
 | Coding assistant transcript | [TRANSCRIPT.md](TRANSCRIPT.md) | |
 
+## Reliability extras
+
+These go beyond the assignment. They add no agent behaviour and make no model calls, so the reported results stand. To control evaluation cost, the full evaluation was not re-run after adding them.
+
+### Calibration
+
+`reliability.analysis` reads saved results and reports how often each confidence label was right. Results are in [`analysis.md`](evals/results/analysis.md).
+
+| System | Confidence | Correct | 95% range |
+|---|---|---|---|
+| Multi-agent | High | 9/11 (82%) | 52% to 95% |
+| Multi-agent | Medium | 10/10 (100%) | 72% to 100% |
+| Single agent | High | 22/22 (100%) | 85% to 100% |
+| Single agent | Medium | 4/4 (100%) | 51% to 100% |
+
+The labels did not prove useful here: high was never more reliable than medium. The ranges overlap, so the sample is too small to be sure.
+
+To estimate cost, add your provider's current prices per million tokens: `--input-price 0.10 --output-price 0.40`. These example numbers are not real prices.
+
+### Regression gate
+
+Use this after any model, prompt or code change:
+
+```bash
+uv run python -m evals --repeats 3             # makes paid model calls
+uv run python -m reliability.regression        # compares results, no model calls
+uv run python -m reliability.regression --update   # only if you accept the new results
+```
+
+It exits with an error if any of these happen:
+
+| Check | Limit |
+|---|---|
+| Accuracy | Falls by more than 5 points |
+| Wrong conclusions, misleading evidence | Any rise |
+| Citation validity | Falls by more than 2 points |
+| Key evidence recall | Falls by more than 5 points |
+| Tokens per run | Rises by more than 20% |
+| Mean latency | Rises by more than 30% |
+| Runs | Any invalid run, or a missing system or incident |
+
+It also warns when any single incident gets worse. The limits are wide because repeated LLM runs vary. They are starting values, not tuned ones. The saved baseline is [`baseline.json`](evals/results/baseline.json).
+
+### Golden dataset
+
+Real findings can become test cases. A person must confirm each answer, so a system mistake cannot become the expected result.
+
+```bash
+uv run python -m reliability.golden draft runs/<incident>.json
+# Edit the draft: redact it, then fill in truth, scenario and reviewed_by
+uv run python -m reliability.golden add data/golden_drafts/<incident>.yaml
+uv run python -m evals --golden --repeats 3    # makes paid model calls
+```
+
+A case is refused if no reviewer is named, if secrets or email addresses remain, if its ID already exists, or if its answer is incomplete. Reviewed cases go in [`data/golden_extra.yaml`](data/golden_extra.yaml), which is empty for now. The 12 assignment incidents stay frozen, so the reported results remain comparable. Use `--golden` only with a baseline created from a golden run.
+
 ## Project layout
 
 ```
 investigator/   Assignment core: agents, workflow, tools, evidence rules, baseline
 evals/          Assignment comparison and scoring
-data/           The 12 test incidents
-reliability/    Extras: redaction, risky-action flag, safe run entry point
+data/           The 12 test incidents, and reviewed golden cases
+reliability/    Extras: safety, calibration, regression gate, golden dataset
 tests/core/     Tests for the core
 tests/reliability/  Tests for the extras
 cli.py          Investigate one incident
@@ -246,17 +304,21 @@ The core does not import the extras, and a test enforces this. `cli.py` and `eva
 
 **Not built:**
 
-- Regression gate against a saved baseline
-- Tool for adding production findings to a golden dataset
-- Per-agent cost and latency in the eval report (it is in the CLI report)
-- Confidence calibration table
-- Human approval step (risky actions are only flagged, and nothing is ever executed)
+- Human approval step. Risky actions are only flagged, and nothing is ever executed, so there is nothing to approve yet.
+- Hosted tracing, such as LangSmith. Everything runs locally.
+
+**Built and tested offline, but not yet used on a new model run:**
+
+- Per-agent tokens in the eval results. The current results do not have them. The CLI report already shows them.
+- The `--golden` evaluation option. It is tested only as far as loading cases, and no golden case exists yet.
+- The fixes listed in [NOTE.md](NOTE.md). They would change agent behaviour, so they need a new paid evaluation and new unseen incidents.
 
 **Known limits:**
 
 - The multi-agent system lost the comparison. Known problems are ties between hypotheses, and concluding the wrong cause with high confidence on INC-12.
 - INC-07 fails in both systems on low confidence. The cause is not diagnosed.
-- A Verifier label is an LLM judgement, so it can be wrong. Confidence labels are not calibrated.
+- A Verifier label is an LLM judgement, so it can be wrong. Confidence labels did not separate right from wrong answers in this evaluation.
+- Regression limits and secret checks catch only what they look for. Passing them does not prove a case or a change is safe.
 - Summaries and action text are not checked against evidence. In one real run, an action named a version number that is not in the data. Hypotheses, ranking and the outcome are checked.
 - Rows are counted, not weighed. Repeated log lines can outweigh one decisive metric.
 - A task that fails loses the evidence it had gathered.

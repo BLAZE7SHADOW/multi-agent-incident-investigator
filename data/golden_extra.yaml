@@ -1,0 +1,3 @@
+# Reviewed production findings, added with: uv run python -m reliability.golden add <draft>
+# Regression runs use these plus data/incidents.yaml. The assignment results never use this file.
+cases: []

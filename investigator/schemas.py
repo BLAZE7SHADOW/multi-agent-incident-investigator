@@ -234,6 +234,8 @@ class Report(BaseModel):
     usage: Usage
     usage_by_agent: dict[str, Usage] = {}
     grounding: Grounding = Grounding()
+    incident: Incident | None = None
+    evidence: list[Evidence] = []
     outcome_reasons: list[str] = []
     inferences: list[Claim] = []
 
@@ -310,6 +312,7 @@ class Case(BaseModel):
     incident: Incident
     scenario: str
     provenance: Literal["synthetic", "production"] = "synthetic"
+    reviewed_by: str = ""
     split: Literal["dev", "holdout"] = "dev"
     world: World
     truth: Truth

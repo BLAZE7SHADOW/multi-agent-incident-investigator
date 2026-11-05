@@ -41,6 +41,7 @@ class RunScore(BaseModel):
     output_tokens: int = 0
     thinking_tokens: int = 0
     total_tokens: int = 0
+    tokens_by_agent: dict[str, int] = {}
     latency_s: float = 0.0
     gaps: int = 0
 
@@ -100,6 +101,7 @@ def score_run(case: Case, report: Report, system: str, repeat: int, latency_s: f
         output_tokens=usage.output_tokens,
         thinking_tokens=usage.thinking_tokens,
         total_tokens=usage.total_tokens,
+        tokens_by_agent={a: u.total_tokens for a, u in report.usage_by_agent.items()},
         latency_s=latency_s,
         gaps=len(report.gaps),
     )
