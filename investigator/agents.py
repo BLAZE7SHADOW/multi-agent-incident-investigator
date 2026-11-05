@@ -4,7 +4,11 @@ import json
 from collections.abc import Mapping, Sequence
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelCallLimitMiddleware
+from langchain.agents.middleware import (
+    AgentMiddleware,
+    ModelCallLimitMiddleware,
+    ToolCallLimitMiddleware,
+)
 from langchain.agents.structured_output import ToolStrategy
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
@@ -48,7 +52,8 @@ Write specific questions, name services and time windows where you can. Tasks wi
 run in parallel. Use depends_on when one task really needs another's finding, for example checking \
 changes to whichever service observability finds failed first. Plan 2 to 4 tasks.
 
-If a critic's requests are given, plan only what they need, and do not repeat completed work.
+If a critic's requests are given, plan only what they need, in 1 or 2 tasks, and do not repeat \
+completed work.
 
 {_UNTRUSTED}"""
 
@@ -59,7 +64,13 @@ Method:
 - Check upstream dependencies, not just the service showing symptoms.
 - Compare regions if metrics disagree with logs or reports.
 - If a result is partial or truncated, narrow your query to see the rest.
-- If a tool fails, record that as a gap. Never guess what it would have shown.
+- If a tool fails, it has already been retried. Record a gap and move on; do not call it again. \
+Never guess what it would have shown.
+
+Be economical. You have a few turns and about 8 tool calls for this question:
+- Answer as soon as the evidence lets you. You do not need to explore everything.
+- Never repeat a query. An empty result is an answer: note it and move on.
+- Only query services named in the incident, your question, or tool results.
 
 Report each claim as one of:
 - fact: a row states it directly. Cite the row's id.
@@ -80,10 +91,11 @@ _REASONING = f"""You are the Reasoning agent. From the findings and evidence, pr
 genuinely competing root-cause hypotheses, including the most obvious explanation and at least one \
 alternative.
 
-For each hypothesis, cite the rows that support it and the rows that contradict it, and list what \
-you are assuming. Look actively for contradicting rows. Weigh timing: a cause must come before its \
-effect. A similar past incident is a lead, not proof. Name the component actually at fault, not \
-the one showing the worst symptoms. Use category "unknown" if nothing explains the incident.
+For each hypothesis, list as supporting only rows that point to that cause, not rows that merely \
+show the incident happening. List the rows that contradict it, and what you are assuming. Look \
+actively for contradicting rows. Weigh timing: a cause must come before its effect. A similar past \
+incident is a lead, not proof. Name the component actually at fault, not the one showing the worst \
+symptoms. Use category "unknown" if nothing explains the incident.
 
 If a critic's objections are given, address them directly.
 
@@ -93,13 +105,15 @@ _VERIFIER = f"""You are the Verifier agent. You independently check evidence aga
 You are not told what anyone else cited.
 
 For each hypothesis, consider every row and return those that matter, with a one-line reason:
-- supports: this row is evidence that this specific cause happened.
+- supports: this row points to this cause's mechanism, for example a change just before onset, \
+an error naming the changed code, or a resource at its limit in the component blamed.
 - contradicts: this row is evidence against this cause, for example it shows the cause came after \
 the effect, or the suspected component was healthy.
-- symptom: this row shows only the incident's effects, which any cause could produce.
+- symptom: this row shows only generic effects any cause could produce, for example a raised \
+error rate, higher latency, or a generic server error with no detail.
 
-Omit rows that are irrelevant to the hypothesis. Be strict: an error or latency spike at the \
-affected service is a symptom unless it points to this specific cause.
+Omit rows that are irrelevant to the hypothesis. Judge each row on what it says, not on how \
+certain you are about the hypothesis as a whole.
 
 {_UNTRUSTED}"""
 
@@ -115,11 +129,14 @@ Ask:
 
 Return one verdict:
 - accept: the evidence establishes the leading hypothesis.
-- investigate: specific further evidence could settle it. Give requests saying exactly what to \
-look for, and from which specialist.
+- investigate: a specific query not yet tried could settle it. Give requests saying exactly what \
+to look for, and from which specialist.
 - insufficient: the evidence cannot establish a cause, and further queries would not help.
 
-Do not accept just to finish. An honest "insufficient" is a good outcome.
+A tool listed as unavailable in the gaps will stay unavailable, so never request it again. If the \
+rows retrieved so far already cover the affected services and show no cause, choose insufficient. \
+Do not accept just to finish, and do not keep investigating in hope. An honest "insufficient" is a \
+good outcome.
 
 {_UNTRUSTED}"""
 
@@ -132,6 +149,19 @@ inconclusive, say so plainly, focus on how to get the missing evidence, and leav
 empty.
 
 {_UNTRUSTED}"""
+
+
+class FinishBeforeLimit(AgentMiddleware):
+    """On the last allowed turn, remove the tools so the agent must submit its result."""
+
+    def __init__(self, max_steps: int) -> None:
+        self.max_steps = max_steps
+
+    async def awrap_model_call(self, request, handler):
+        turns_taken = sum(message.type == "ai" for message in request.messages)
+        if turns_taken >= self.max_steps - 1:
+            request = request.override(tools=[])
+        return await handler(request)
 
 
 def _data(payload: object) -> str:
@@ -163,13 +193,17 @@ class LLMAgents:
         def build(
             system: str, schema: type[BaseModel], allowed: set[str] | frozenset = frozenset()
         ):
+            limits = budget.limits
+            investigating = [
+                ToolCallLimitMiddleware(run_limit=limits.max_task_tool_calls),
+                tool_retry(),
+                FinishBeforeLimit(limits.max_task_steps),
+            ]
             middleware = [
                 budget.middleware(),
-                ModelCallLimitMiddleware(
-                    run_limit=budget.limits.max_task_steps, exit_behavior="end"
-                ),
+                ModelCallLimitMiddleware(run_limit=limits.max_task_steps, exit_behavior="end"),
                 model_retry(),
-                *([tool_retry()] if allowed else []),
+                *(investigating if allowed else []),
                 *extra_middleware,
             ]
             return create_agent(

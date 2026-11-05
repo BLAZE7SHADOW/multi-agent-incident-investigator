@@ -1,5 +1,6 @@
 import pytest
 from fakes import RoutingChatModel, reply
+from langchain_core.messages import AIMessage
 
 from investigator.agents import LLMAgents
 from investigator.budget import RunBudget
@@ -217,6 +218,45 @@ async def test_critic_requests_drive_the_next_round():
     assert "check again" in prompts_for(model, "Observability")[-1]
     assert "timing unclear" in prompts_for(model, "Orchestrator")[-1]
     assert "timing unclear" in prompts_for(model, "Reasoning")[-1]
+
+
+async def test_last_turn_removes_tools_so_the_agent_must_finish():
+    model = scripted(
+        Orchestrator=[reply("Plan", {"tasks": [task("o", "observability")]})],
+        Observability=[
+            reply("query_logs", {"service": "api"}),
+            reply("query_logs", {"service": "b"}),
+            reply("Finding", {"summary": "wrapped up", "claims": [], "gaps": []}),
+        ],
+    )
+    report = await run(model, Limits(max_task_steps=3))
+    with_tools = [names for names in model.bound if "query_logs" in names]
+    finish_only = [names for names in model.bound if names == ["Finding"]]
+    assert len(with_tools) == 2 and len(finish_only) == 1
+    assert not any("step limit" in gap for gap in report.gaps)
+
+
+async def test_tool_calls_per_task_are_capped():
+    many = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "query_logs", "args": {"service": f"s{i}"}, "id": f"c{i}", "type": "tool_call"}
+            for i in range(5)
+        ],
+    )
+    model = scripted(
+        Orchestrator=[reply("Plan", {"tasks": [task("o", "observability")]})],
+        Observability=[many, reply("Finding", FINDING)],
+    )
+    report = await run(model, Limits(max_task_tool_calls=2))
+    assert report.usage.tool_calls == 2
+
+
+async def test_specialist_prompt_states_its_limits():
+    model = scripted()
+    await run(model)
+    prompt = prompts_for(model, "Observability")[0]
+    assert "Never repeat a query" in prompt
 
 
 async def test_step_limit_keeps_retrieved_evidence():

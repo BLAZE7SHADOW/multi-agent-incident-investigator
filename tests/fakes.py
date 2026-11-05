@@ -46,12 +46,14 @@ class RoutingChatModel(BaseChatModel):
 
     replies: dict[str, list[Any]]
     calls: list[tuple[str, list[Any]]] = []
+    bound: list[list[str]] = []
 
     @property
     def _llm_type(self) -> str:
         return "routing"
 
     def bind_tools(self, tools, *, tool_choice=None, **kwargs):
+        self.bound.append([getattr(tool, "name", str(tool)) for tool in tools])
         return self
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
