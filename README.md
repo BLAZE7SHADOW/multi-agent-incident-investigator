@@ -213,6 +213,27 @@ Correct runs out of 3:
 
 Raw data: [`results.md`](evals/results/results.md) and [`results.json`](evals/results/results.json).
 
+## Learnings
+
+Each change we made, with its measured result before and after. "Dev" results come from the incidents we tuned on, so they show a change worked there, not that it works in general.
+
+| Action | Before | After | Lesson |
+|---|---|---|---|
+| LLM scored its own confidence | Score was the model's opinion | A Verifier labels rows and code computes confidence | Never let a model grade itself |
+| Specialists could use every turn on tool calls | First real INC-08 run used all 40 tool calls and ended on budget, 104,139 tokens | Last turn forces a finding: INC-01 and INC-08 right in 6/6 dev runs | Agents need a forced finish, not just a limit |
+| Prompts tuned on dev incidents | Verifier called a specific error a mere symptom: INC-01 flipped to inconclusive | INC-01 right in 3/3 dev runs | Tuning on dev cases can't prove it generalises |
+| Token reduction (low thinking, one retry layer, compact prompts) | INC-01 about 32k tokens, INC-08 about 104k | INC-01 about 17.6k, INC-08 about 30k, still 6/6 right on dev | Measure where tokens go before cutting |
+| Fail fast on daily quota | Up to 36 attempts per call, about 37 seconds each, and a quota failure looked like a correct "inconclusive" | Stops at once and is reported as invalid. The full evaluation had 0 invalid runs | Infrastructure failures must never be scored as answers |
+| Topology and past incidents no longer count as evidence | Pilot INC-07: multi-agent concluded the wrong cause, `payments`, mostly from topology rows | No full-evaluation INC-07 run blamed `payments`, but INC-07 still failed for other reasons | Background is a lead, not proof |
+| Compared multi-agent with a single agent | Unknown | Multi-agent 69%, single agent 89%; on holdout, 33% vs 89% | Report the comparison as measured |
+| Fixes 1 and 2: deploy evidence and failed-rollback rules | 13 known cases: 6/13. 8 realistic cases: 6/8 | 13 known cases: 12/13. 8 realistic cases: 3/8. **Removed** | Rules designed from failures can overfit |
+| Metamorphic tests | No robustness tests | Found that harmless old log lines could cut off key evidence | Test changes that shouldn't change the answer |
+| Log tool keeps errors, warnings and newest lines when capped | Metamorphic 122/130; on blind cases 226/234 | Metamorphic 130/130; on blind cases 234/234; blind cases as written 16/18 both before and after | Helped only on noise we designed. Harmless, but unproven on real noise |
+| Blind test set from an independent agent | 12 cases, every category and difficulty below 3 cases | 36 cases, all at 3 or more except prompt injection | Separate the case writer from the system builder |
+| `partial` faults honour `times` | Partial results never recovered | Recover after `times` calls. No score changed on either set | Blind cases find bugs our own cases missed |
+
+**Overall lesson:** most of our wins were on cases we had already seen. The two checks that we could not tune for, the realistic cases and the blind set, showed that both the overfitted rules and the log fix were weaker than they first looked.
+
 ## Requirements map
 
 | Requirement | Where | Proof |
@@ -294,7 +315,7 @@ Offline scoring of the 18 conclusive cases, with the same labels as above:
 
 - The log fix did no harm on blind cases, but made no difference on them as written. Its gain appears only on noise the developer added.
 - Both unsolved cases log key evidence under another name for the service, such as `card-processing` for `cards`. Tools match service names exactly, and nothing maps one name to the other. A service catalog would fix this. Not fixed, because it was found on this set.
-- The blind set found a bug: a `partial` fault ignores `times`, so partial results never recover. Not fixed, for the same reason. The assignment cases do not use `times` with partial faults, so their results are unaffected.
+- The blind set found a bug: a `partial` fault ignored `times`, so partial results never recovered. This is now fixed, because it broke the documented data format. No offline score changed, on either set.
 - The 6 inconclusive blind cases need a real model to test, which has not been run.
 
 Detail: [`metamorphic_blind.md`](evals/results/metamorphic_blind.md). Coverage of both sets: [`coverage.md`](evals/results/coverage.md).
