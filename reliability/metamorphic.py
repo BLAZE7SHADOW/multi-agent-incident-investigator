@@ -216,18 +216,19 @@ def shuffle_rows(raw, topology):
     return raw, topology, {}, {}
 
 
-def _noise(raw, count):
+def _noise(raw, count, hours=-2, level="INFO", msg="health check passed"):
+    """Harmless log lines on the reported service, starting `hours` from the report time."""
     raw = copy.deepcopy(raw)
     service = raw["incident"]["service"]
-    start = datetime.fromisoformat(str(raw["incident"]["reported_at"])) - timedelta(hours=2)
+    start = datetime.fromisoformat(str(raw["incident"]["reported_at"])) + timedelta(hours=hours)
     for i in range(count):
         raw["world"].setdefault("logs", []).append(
             {
                 "id": f"noise-{i:02d}",
                 "ts": (start + timedelta(minutes=i)).strftime("%Y-%m-%dT%H:%M"),
                 "service": service,
-                "level": "INFO",
-                "msg": "health check passed",
+                "level": level,
+                "msg": msg,
             }
         )
     return raw
@@ -239,6 +240,19 @@ def light_noise(raw, topology):
 
 def heavy_noise(raw, topology):
     return _noise(raw, 25), topology, {}, {}
+
+
+def newer_noise(raw, topology):
+    return _noise(raw, 25, hours=0), topology, {}, {}
+
+
+def warning_noise(raw, topology):
+    return (
+        _noise(raw, 25, level="WARN", msg="deprecated config key, using default"),
+        topology,
+        {},
+        {},
+    )
 
 
 def drop_key_row(raw, topology):
@@ -275,6 +289,8 @@ TRANSFORMS = {
     "shuffle row order": (shuffle_rows, "same"),
     "add 3 noise rows": (light_noise, "same"),
     "add 25 noise rows": (heavy_noise, "same"),
+    "add 25 noise rows after the report": (newer_noise, "same"),
+    "add 25 harmless warnings": (warning_noise, "same"),
     "drop a key evidence row": (drop_key_row, "not_more"),
     "add a contradicting row": (add_contradiction, "not_more"),
 }

@@ -108,15 +108,11 @@ def test_confidence_rising_fails_not_more():
 
 def test_current_results_are_recorded():
     """Today's results. A change that moves these must be explained."""
+    # Before the log fix: 122/130, failing INC-04, 06, 07 and 11 on older noise and warnings.
     failures = sorted((r["incident"], r["transform"]) for r in RESULTS if not r["passed"])
-    assert failures == [
-        ("INC-04", "add 25 noise rows"),
-        ("INC-06", "add 25 noise rows"),
-        ("INC-07", "add 25 noise rows"),
-        ("INC-11", "add 25 noise rows"),
-    ]
+    assert failures == []
 
 
 def test_report_lists_failures():
     text_out = render(RESULTS)
-    assert "**106/110**" in text_out and "INC-04 | add 25 noise rows" in text_out
+    assert "**130/130**" in text_out and "## Failures\n\nNone." in text_out

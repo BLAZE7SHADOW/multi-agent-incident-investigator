@@ -130,6 +130,50 @@ async def test_results_are_capped():
     assert result.truncated
 
 
+def many_logs(levels_and_times):
+    return [
+        {**LOG, "id": f"log-{i:02d}", "level": level, "ts": f"2026-01-01T{hour:02d}:00"}
+        for i, (level, hour) in enumerate(levels_and_times)
+    ]
+
+
+async def test_capped_logs_keep_errors_and_warnings_before_info():
+    rows = many_logs([("INFO", 1)] * 25 + [("ERROR", 0), ("WARN", 0)])
+    result = await call(tools_for(logs=rows)["query_logs"], service="api")
+    levels = [r["level"] for r in result.rows]
+    assert len(result.rows) == MAX_ROWS and result.truncated
+    assert levels.count("ERROR") == 1 and levels.count("WARN") == 1
+    assert "showing 20 of 27" in result.note
+
+
+async def test_capped_logs_keep_the_newest_within_a_level():
+    rows = many_logs([("INFO", hour % 24) for hour in range(23)])  # hours 0..22
+    result = await call(tools_for(logs=rows)["query_logs"], service="api")
+    hours = sorted(int(r["ts"][11:13]) for r in result.rows)
+    assert hours == list(range(3, 23))
+
+
+async def test_capped_logs_come_back_in_time_order():
+    rows = many_logs([("INFO", 5), ("ERROR", 1), ("WARN", 9)] * 9)
+    result = await call(tools_for(logs=rows)["query_logs"], service="api")
+    stamps = [(r["ts"], r["id"]) for r in result.rows]
+    assert stamps == sorted(stamps)
+
+
+async def test_selection_does_not_depend_on_storage_order():
+    rows = many_logs([("INFO", h) for h in range(10)] + [("WARN", h) for h in range(15)])
+    forward = await call(tools_for(logs=rows)["query_logs"], service="api")
+    backward = await call(tools_for(logs=list(reversed(rows)))["query_logs"], service="api")
+    assert [r["id"] for r in forward.rows] == [r["id"] for r in backward.rows]
+
+
+async def test_uncapped_logs_are_unchanged_and_carry_no_note():
+    rows = many_logs([("INFO", h) for h in range(MAX_ROWS)])
+    result = await call(tools_for(logs=rows)["query_logs"], service="api")
+    assert [r["id"] for r in result.rows] == [r["id"] for r in rows]
+    assert not result.truncated and result.note == ""
+
+
 async def test_invalid_arguments_are_rejected():
     with pytest.raises(ValidationError):
         await tools_for()["query_logs"].ainvoke({"level": "ERROR"})

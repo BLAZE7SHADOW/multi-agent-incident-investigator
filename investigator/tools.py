@@ -111,12 +111,32 @@ def _metric_window(row: dict[str, Any], start: str, end: str) -> dict[str, Any] 
     return {**row, "start": window[0][0], "values": [value for _, value in window]}
 
 
+_SEVERITY = {"ERROR": 0, "WARN": 1}
+
+
+def _most_useful_logs(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str]:
+    """Too many matches: keep errors, then warnings, then info, newest first within each level.
+
+    Returned in time order. Shown rows never depend on how the data was stored.
+    """
+    if len(rows) <= MAX_ROWS:
+        return rows, ""
+    ranked = sorted(rows, key=lambda r: r["ts"], reverse=True)
+    ranked.sort(key=lambda r: _SEVERITY.get(r["level"], 2))
+    kept = sorted(ranked[:MAX_ROWS], key=lambda r: (r["ts"], r["id"]))
+    note = (
+        f"showing {MAX_ROWS} of {len(rows)} matches: errors and warnings first, then the newest; "
+        "narrow the query to see the rest"
+    )
+    return kept, note
+
+
 def build_tools(world: World) -> list[BaseTool]:
     failures: Counter[str] = Counter()
 
-    def respond(tool: str, rows: list[dict[str, Any]]) -> str:
+    def respond(tool: str, rows: list[dict[str, Any]], selected: str = "") -> str:
         fault = next((f for f in world.faults if f.tool == tool), None)
-        status, note = "ok", "" if rows else "no matching rows"
+        status, note = "ok", selected or ("" if rows else "no matching rows")
         if fault and fault.kind == "partial":
             if len(rows) > fault.max_rows:
                 note = "backend returned partial results; narrow the query to see more"
@@ -125,7 +145,7 @@ def build_tools(world: World) -> list[BaseTool]:
         elif fault and (fault.times is None or failures[tool] < fault.times):
             failures[tool] += 1
             raise ToolFault(tool, fault.kind)
-        truncated = len(rows) > MAX_ROWS
+        truncated = bool(selected) or len(rows) > MAX_ROWS
         return wrap_untrusted(
             ToolResult(
                 tool=tool, status=status, rows=rows[:MAX_ROWS], note=note, truncated=truncated
@@ -144,7 +164,8 @@ def build_tools(world: World) -> list[BaseTool]:
             and contains.lower() in row["msg"].lower()
             and _in_window(row["ts"], start, end)
         ]
-        return respond("query_logs", sorted(rows, key=lambda row: row["ts"]))
+        kept, selected = _most_useful_logs(sorted(rows, key=lambda row: (row["ts"], row["id"])))
+        return respond("query_logs", kept, selected)
 
     def query_metrics(
         service: str, metric: str = "", region: str = "", start: str = "", end: str = ""
