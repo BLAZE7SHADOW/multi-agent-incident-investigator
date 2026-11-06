@@ -128,8 +128,9 @@ async def main() -> None:
         trace = await record(cases[incident])
         (TRACES / f"{incident}.json").write_text(json.dumps(trace, indent=1, default=str))
         usage = trace["report"]["usage"]
+        tokens = usage["input_tokens"] + usage["output_tokens"]
         print(
-            f"{incident}: {trace['report']['outcome']}, {usage['total_tokens']} tokens, "
+            f"{incident}: {trace['report']['outcome']}, {tokens} tokens, "
             f"{trace['seconds']}s, {len(trace['events'])} events"
         )
     index = sorted(p.stem for p in TRACES.glob("*.json") if p.stem != "index")

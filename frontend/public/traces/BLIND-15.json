@@ -1,0 +1,2095 @@
+{
+ "incident": {
+  "id": "BLIND-15",
+  "title": "Account summary errors for US customers",
+  "description": "US customers see errors loading balances since about 12:40. KYC vendor latency has also been elevated today.",
+  "service": "mobile-gateway",
+  "reported_at": "2026-09-21T13:10"
+ },
+ "scenario": "Accounts in us-east runs out of file descriptors; kyc vendor latency is elevated globally at the same time but EU accounts is fine, and accounts appears under several names.",
+ "tags": [
+  "regional",
+  "conflicting_signals",
+  "name_mismatch"
+ ],
+ "truth": {
+  "outcome": "conclusive",
+  "category": "resource_exhaustion",
+  "component": "accounts",
+  "key_evidence": [
+   "log-12",
+   "met-01",
+   "met-02"
+  ],
+  "trap_component": "kyc"
+ },
+ "world": {
+  "logs": [
+   {
+    "id": "log-01",
+    "ts": "2026-09-21T11:45",
+    "service": "accounts-api",
+    "level": "INFO",
+    "msg": "address normalisation batch done records=5108"
+   },
+   {
+    "id": "log-02",
+    "ts": "2026-09-21T11:48",
+    "service": "mobile-gateway",
+    "level": "WARN",
+    "msg": "request from client ios/6.1.0 missing Accept-Language; defaulting en-GB"
+   },
+   {
+    "id": "log-03",
+    "ts": "2026-09-21T11:48",
+    "service": "accounts-api",
+    "level": "INFO",
+    "msg": "account limits cache refreshed entries=88120"
+   },
+   {
+    "id": "log-04",
+    "ts": "2026-09-21T12:05",
+    "service": "kyc",
+    "level": "WARN",
+    "msg": "idverify latency p99 2.8s region=eu-west (vendor notice: scheduled maintenance)"
+   },
+   {
+    "id": "log-05",
+    "ts": "2026-09-21T12:08",
+    "service": "kyc",
+    "level": "WARN",
+    "msg": "idverify latency p99 2.7s region=us-east (vendor notice: scheduled maintenance)"
+   },
+   {
+    "id": "log-06",
+    "ts": "2026-09-21T12:14",
+    "service": "mobile-gateway",
+    "level": "INFO",
+    "msg": "POST /v2/transfers 201 118ms"
+   },
+   {
+    "id": "log-07",
+    "ts": "2026-09-21T12:20",
+    "service": "accounts-api",
+    "level": "INFO",
+    "msg": "GET /v1/accounts/{id}/summary 200 33ms"
+   },
+   {
+    "id": "log-08",
+    "ts": "2026-09-21T12:21",
+    "service": "accounts-api",
+    "level": "INFO",
+    "msg": "account limits cache refreshed entries=88120"
+   },
+   {
+    "id": "log-09",
+    "ts": "2026-09-21T12:25",
+    "service": "accounts-api",
+    "level": "INFO",
+    "msg": "address normalisation batch done records=5558"
+   },
+   {
+    "id": "log-10",
+    "ts": "2026-09-21T12:25",
+    "service": "accounts-api",
+    "level": "WARN",
+    "msg": "slow query 612ms on reporting replica (threshold 500ms) query=monthly_spend_rollup"
+   },
+   {
+    "id": "log-11",
+    "ts": "2026-09-21T12:31",
+    "service": "accounts-api",
+    "level": "WARN",
+    "msg": "region=us-east open file descriptors 61200/65535"
+   },
+   {
+    "id": "log-12",
+    "ts": "2026-09-21T12:38",
+    "service": "accounts-api",
+    "level": "ERROR",
+    "msg": "region=us-east accept tcp 0.0.0.0:8080: accept4: too many open files (fd 65535/65535)"
+   },
+   {
+    "id": "log-13",
+    "ts": "2026-09-21T12:39",
+    "service": "mobile-gateway",
+    "level": "WARN",
+    "msg": "upstream accounts connection refused region=us-east"
+   },
+   {
+    "id": "log-14",
+    "ts": "2026-09-21T12:41",
+    "service": "kyc",
+    "level": "INFO",
+    "msg": "document check accepted provider=idverify"
+   },
+   {
+    "id": "log-15",
+    "ts": "2026-09-21T12:44",
+    "service": "accounts-api",
+    "level": "ERROR",
+    "msg": "region=us-east dial ledger.internal:8443: socket: too many open files"
+   },
+   {
+    "id": "log-16",
+    "ts": "2026-09-21T12:45",
+    "service": "kyc",
+    "level": "INFO",
+    "msg": "sanctions list refreshed entries=12904"
+   },
+   {
+    "id": "log-17",
+    "ts": "2026-09-21T12:45",
+    "service": "mobile-gateway",
+    "level": "WARN",
+    "msg": "client sent deprecated header X-App-Build; ignoring"
+   },
+   {
+    "id": "log-18",
+    "ts": "2026-09-21T12:46",
+    "service": "accounts-api",
+    "level": "INFO",
+    "msg": "region=eu-west GET /v1/accounts/{id}/summary 200 35ms"
+   },
+   {
+    "id": "log-19",
+    "ts": "2026-09-21T12:47",
+    "service": "auth",
+    "level": "INFO",
+    "msg": "refresh token rotated client=android"
+   },
+   {
+    "id": "log-20",
+    "ts": "2026-09-21T12:50",
+    "service": "kyc",
+    "level": "INFO",
+    "msg": "document check accepted provider=idverify"
+   },
+   {
+    "id": "log-21",
+    "ts": "2026-09-21T12:52",
+    "service": "kyc",
+    "level": "WARN",
+    "msg": "idverify latency p99 2.9s region=us-east"
+   },
+   {
+    "id": "log-22",
+    "ts": "2026-09-21T12:58",
+    "service": "accounts-api",
+    "level": "ERROR",
+    "msg": "region=us-east accept4: too many open files"
+   },
+   {
+    "id": "log-23",
+    "ts": "2026-09-21T12:58",
+    "service": "mobile-gateway",
+    "level": "WARN",
+    "msg": "client sent deprecated header X-App-Build; ignoring"
+   },
+   {
+    "id": "log-24",
+    "ts": "2026-09-21T13:01",
+    "service": "kyc",
+    "level": "INFO",
+    "msg": "document check accepted provider=idverify"
+   }
+  ],
+  "metrics": [
+   {
+    "id": "met-01",
+    "service": "accounts",
+    "metric": "open_fds",
+    "region": "us-east",
+    "start": "2026-09-21T11:30",
+    "step_min": 10,
+    "values": [
+     41200,
+     44800,
+     48600,
+     52100,
+     55900,
+     59700,
+     63400,
+     65535,
+     65535,
+     65535
+    ]
+   },
+   {
+    "id": "met-02",
+    "service": "accounts",
+    "metric": "open_fds",
+    "region": "eu-west",
+    "start": "2026-09-21T11:30",
+    "step_min": 10,
+    "values": [
+     8100,
+     8200,
+     8050,
+     8150,
+     8120,
+     8090,
+     8180,
+     8110,
+     8140,
+     8100
+    ]
+   },
+   {
+    "id": "met-03",
+    "service": "mobile-gateway",
+    "metric": "accounts_5xx_ratio",
+    "region": "us-east",
+    "start": "2026-09-21T11:30",
+    "step_min": 10,
+    "values": [
+     0.0,
+     0.001,
+     0.0,
+     0.001,
+     0.001,
+     0.002,
+     0.08,
+     0.61,
+     0.66,
+     0.64
+    ]
+   },
+   {
+    "id": "met-04",
+    "service": "kyc",
+    "metric": "idverify_latency_p99_ms",
+    "region": "global",
+    "start": "2026-09-21T11:30",
+    "step_min": 10,
+    "values": [
+     620,
+     610,
+     2500,
+     2800,
+     2750,
+     2900,
+     2850,
+     2800,
+     2900,
+     2880
+    ]
+   }
+  ],
+  "deployments": [
+   {
+    "id": "dep-01",
+    "ts": "2026-09-14T11:00",
+    "service": "accounts-svc",
+    "kind": "deploy",
+    "detail": "v6.5.0: account nickname editing"
+   }
+  ],
+  "history": [
+   {
+    "id": "his-01",
+    "summary": "2026-05-15 kyc onboarding failures after kyc v1.7 deploy mis-parsed passport MRZ"
+   }
+  ],
+  "faults": []
+ },
+ "events": [
+  {
+   "t": 3.06,
+   "type": "step",
+   "node": "orchestrate",
+   "update": {
+    "tasks": {
+     "r1-obs_1": {
+      "id": "r1-obs_1",
+      "agent": "observability",
+      "question": "Check logs and error metrics for mobile-gateway, account/balance services, and KYC service integration between 12:30 and 13:15 on 2026-09-21, specifically filtering for US customer requests.",
+      "depends_on": [],
+      "status": "pending",
+      "attempts": 0,
+      "finding": null
+     },
+     "r1-dep_1": {
+      "id": "r1-dep_1",
+      "agent": "dependency",
+      "question": "Check recent deployments, configuration updates, and external vendor dependencies (especially KYC vendor integration) for mobile-gateway and related backend services around 12:40 on 2026-09-21.",
+      "depends_on": [],
+      "status": "pending",
+      "attempts": 0,
+      "finding": null
+     }
+    },
+    "round": 1,
+    "evidence_seen": 0,
+    "trace": [
+     "orchestrator: round 1, planned: ['r1-dep_1', 'r1-obs_1']"
+    ],
+    "usage": {
+     "input_tokens": 394,
+     "output_tokens": 290,
+     "thinking_tokens": 132,
+     "llm_calls": 1,
+     "tool_calls": 0
+    }
+   }
+  },
+  {
+   "t": 3.06,
+   "type": "step",
+   "node": "schedule",
+   "update": {
+    "usage": {
+     "input_tokens": 394,
+     "output_tokens": 290,
+     "thinking_tokens": 132,
+     "llm_calls": 1,
+     "tool_calls": 0
+    }
+   }
+  },
+  {
+   "t": 4.62,
+   "type": "tool",
+   "agent": "dependency",
+   "tool": "get_deployments",
+   "args": {
+    "start": "2026-09-21T10:00"
+   },
+   "status": "ok",
+   "rows": [],
+   "note": "no matching rows",
+   "seconds": 0.0
+  },
+  {
+   "t": 4.62,
+   "type": "tool",
+   "agent": "dependency",
+   "tool": "get_dependencies",
+   "args": {
+    "service": "mobile-gateway"
+   },
+   "status": "ok",
+   "rows": [
+    "t-01",
+    "t-02",
+    "t-03",
+    "t-04",
+    "t-05"
+   ],
+   "note": "",
+   "seconds": 0.0
+  },
+  {
+   "t": 5.43,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_logs",
+   "args": {
+    "end": "2026-09-21T13:15",
+    "contains": "US",
+    "start": "2026-09-21T12:30",
+    "service": "mobile-gateway"
+   },
+   "status": "ok",
+   "rows": [
+    "log-13"
+   ],
+   "note": "",
+   "seconds": 0.0
+  },
+  {
+   "t": 5.43,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_metrics",
+   "args": {
+    "service": "mobile-gateway",
+    "end": "2026-09-21T13:15",
+    "start": "2026-09-21T12:30"
+   },
+   "status": "ok",
+   "rows": [
+    "met-03"
+   ],
+   "note": "",
+   "seconds": 0.0
+  },
+  {
+   "t": 6.8,
+   "type": "tool",
+   "agent": "dependency",
+   "tool": "search_incidents",
+   "args": {
+    "query": "KYC vendor mobile-gateway accounts balance"
+   },
+   "status": "ok",
+   "rows": [
+    "his-01"
+   ],
+   "note": "",
+   "seconds": 0.0
+  },
+  {
+   "t": 6.8,
+   "type": "tool",
+   "agent": "dependency",
+   "tool": "get_deployments",
+   "args": "{}",
+   "status": "ok",
+   "rows": [
+    "dep-01"
+   ],
+   "note": "",
+   "seconds": 0.0
+  },
+  {
+   "t": 7.28,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_logs",
+   "args": {
+    "service": "accounts",
+    "end": "2026-09-21T13:15",
+    "start": "2026-09-21T12:30"
+   },
+   "status": "ok",
+   "rows": [],
+   "note": "no matching rows",
+   "seconds": 0.0
+  },
+  {
+   "t": 7.28,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_logs",
+   "args": {
+    "start": "2026-09-21T12:30",
+    "service": "kyc-service",
+    "end": "2026-09-21T13:15"
+   },
+   "status": "ok",
+   "rows": [],
+   "note": "no matching rows",
+   "seconds": 0.0
+  },
+  {
+   "t": 8.53,
+   "type": "tool",
+   "agent": "dependency",
+   "tool": "get_dependencies",
+   "args": {
+    "service": "accounts"
+   },
+   "status": "ok",
+   "rows": [
+    "t-02",
+    "t-12",
+    "t-13"
+   ],
+   "note": "",
+   "seconds": 0.0
+  },
+  {
+   "t": 9.12,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_metrics",
+   "args": {
+    "start": "2026-09-21T12:30",
+    "end": "2026-09-21T13:15",
+    "service": "kyc-service"
+   },
+   "status": "ok",
+   "rows": [],
+   "note": "no matching rows",
+   "seconds": 0.0
+  },
+  {
+   "t": 9.12,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_metrics",
+   "args": {
+    "end": "2026-09-21T13:15",
+    "start": "2026-09-21T12:30",
+    "service": "account-service"
+   },
+   "status": "ok",
+   "rows": [],
+   "note": "no matching rows",
+   "seconds": 0.0
+  },
+  {
+   "t": 12.56,
+   "type": "step",
+   "node": "run_task",
+   "update": {
+    "tasks": {
+     "r1-dep_1": {
+      "id": "r1-dep_1",
+      "agent": "dependency",
+      "question": "Check recent deployments, configuration updates, and external vendor dependencies (especially KYC vendor integration) for mobile-gateway and related backend services around 12:40 on 2026-09-21.",
+      "depends_on": [],
+      "status": "done",
+      "attempts": 0,
+      "finding": {
+       "summary": "Checked deployments, configuration updates, service dependencies, and past incidents. mobile-gateway depends on accounts, which in turn depends on the kyc service. No deployments or config changes were logged on 2026-09-21.",
+       "claims": [
+        {
+         "text": "mobile-gateway directly depends on auth, accounts, payments, cards, and statements services.",
+         "kind": "fact",
+         "evidence_ids": [
+          "t-01",
+          "t-02",
+          "t-03",
+          "t-04",
+          "t-05"
+         ]
+        },
+        {
+         "text": "The accounts service depends on the kyc service, linking account functionality to the KYC integration.",
+         "kind": "fact",
+         "evidence_ids": [
+          "t-13"
+         ]
+        },
+        {
+         "text": "No deployments or configuration changes were recorded on 2026-09-21. The most recent recorded deployment across services was for accounts-svc (v6.5.0) on 2026-09-14T11:00.",
+         "kind": "fact",
+         "evidence_ids": [
+          "dep-01"
+         ]
+        },
+        {
+         "text": "A past incident on 2026-05-15 involved KYC onboarding failures after a KYC v1.7 deployment mis-parsed passport MRZ data.",
+         "kind": "fact",
+         "evidence_ids": [
+          "his-01"
+         ]
+        }
+       ],
+       "gaps": [
+        "No direct deployment or configuration update logs were found specifically around 12:40 on 2026-09-21."
+       ]
+      }
+     }
+    },
+    "evidence": {
+     "t-01": {
+      "id": "t-01",
+      "source": "dependencies",
+      "content": "{\"id\": \"t-01\", \"service\": \"mobile-gateway\", \"depends_on\": \"auth\"}"
+     },
+     "t-02": {
+      "id": "t-02",
+      "source": "dependencies",
+      "content": "{\"id\": \"t-02\", \"service\": \"mobile-gateway\", \"depends_on\": \"accounts\"}"
+     },
+     "t-03": {
+      "id": "t-03",
+      "source": "dependencies",
+      "content": "{\"id\": \"t-03\", \"service\": \"mobile-gateway\", \"depends_on\": \"payments\"}"
+     },
+     "t-04": {
+      "id": "t-04",
+      "source": "dependencies",
+      "content": "{\"id\": \"t-04\", \"service\": \"mobile-gateway\", \"depends_on\": \"cards\"}"
+     },
+     "t-05": {
+      "id": "t-05",
+      "source": "dependencies",
+      "content": "{\"id\": \"t-05\", \"service\": \"mobile-gateway\", \"depends_on\": \"statements\"}"
+     },
+     "dep-01": {
+      "id": "dep-01",
+      "source": "deployments",
+      "content": "{\"id\": \"dep-01\", \"ts\": \"2026-09-14T11:00\", \"service\": \"accounts-svc\", \"kind\": \"deploy\", \"detail\": \"v6.5.0: account nickname editing\"}"
+     },
+     "his-01": {
+      "id": "his-01",
+      "source": "history",
+      "content": "{\"id\": \"his-01\", \"summary\": \"2026-05-15 kyc onboarding failures after kyc v1.7 deploy mis-parsed passport MRZ\"}"
+     },
+     "t-12": {
+      "id": "t-12",
+      "source": "dependencies",
+      "content": "{\"id\": \"t-12\", \"service\": \"accounts\", \"depends_on\": \"ledger\"}"
+     },
+     "t-13": {
+      "id": "t-13",
+      "source": "dependencies",
+      "content": "{\"id\": \"t-13\", \"service\": \"accounts\", \"depends_on\": \"kyc\"}"
+     }
+    },
+    "gaps": [
+     "No direct deployment or configuration update logs were found specifically around 12:40 on 2026-09-21."
+    ],
+    "failed_tools": [],
+    "grounding": {
+     "citations": 8,
+     "valid_citations": 8,
+     "downgraded_claims": 0
+    },
+    "trace": [
+     "dependency: r1-dep_1 found ['dep-01', 'his-01', 't-01', 't-02', 't-03', 't-04', 't-05', 't-12', 't-13']"
+    ],
+    "usage": {
+     "input_tokens": 11711,
+     "output_tokens": 2086,
+     "thinking_tokens": 994,
+     "llm_calls": 9,
+     "tool_calls": 11
+    }
+   }
+  },
+  {
+   "t": 15.69,
+   "type": "step",
+   "node": "run_task",
+   "update": {
+    "tasks": {
+     "r1-obs_1": {
+      "id": "r1-obs_1",
+      "agent": "observability",
+      "question": "Check logs and error metrics for mobile-gateway, account/balance services, and KYC service integration between 12:30 and 13:15 on 2026-09-21, specifically filtering for US customer requests.",
+      "depends_on": [],
+      "status": "done",
+      "attempts": 0,
+      "finding": {
+       "summary": "In the 12:30 to 13:15 window on 2026-09-21, mobile-gateway in region us-east experienced a sharp rise in 5xx error rates for accounts (accounts_5xx_ratio reaching ~0.61-0.66 starting around 12:40), corresponding to log evidence of connection refusals when calling the upstream accounts service in us-east.",
+       "claims": [
+        {
+         "text": "Between 12:30 and 13:15 on 2026-09-21, the mobile-gateway service reported elevated accounts_5xx_ratio in region us-east, rising from 0.08 at 12:30 to 0.61 at 12:40, 0.66 at 12:50, and 0.64 at 13:00.",
+         "kind": "fact",
+         "evidence_ids": [
+          "met-03"
+         ]
+        },
+        {
+         "text": "At 12:39 on 2026-09-21, mobile-gateway logged a WARN message: 'upstream accounts connection refused region=us-east'.",
+         "kind": "fact",
+         "evidence_ids": [
+          "log-13"
+         ]
+        },
+        {
+         "text": "The 5xx errors affecting US customers on mobile-gateway starting around 12:40 coincide with connection refusals from the upstream accounts service in the us-east region.",
+         "kind": "inference",
+         "evidence_ids": [
+          "log-13",
+          "met-03"
+         ]
+        }
+       ],
+       "gaps": [
+        "Log queries for service 'accounts' and 'kyc-service' returned no matching rows, and additional service name variations could not be fully queried due to tool invocation limits."
+       ]
+      }
+     }
+    },
+    "evidence": {
+     "met-03": {
+      "id": "met-03",
+      "source": "metrics",
+      "content": "{\"id\": \"met-03\", \"service\": \"mobile-gateway\", \"metric\": \"accounts_5xx_ratio\", \"region\": \"us-east\", \"start\": \"2026-09-21T12:30\", \"step_min\": 10, \"values\": [0.08, 0.61, 0.66, 0.64]}"
+     },
+     "log-13": {
+      "id": "log-13",
+      "source": "logs",
+      "content": "{\"id\": \"log-13\", \"ts\": \"2026-09-21T12:39\", \"service\": \"mobile-gateway\", \"level\": \"WARN\", \"msg\": \"upstream accounts connection refused region=us-east\"}"
+     }
+    },
+    "gaps": [
+     "Log queries for service 'accounts' and 'kyc-service' returned no matching rows, and additional service name variations could not be fully queried due to tool invocation limits."
+    ],
+    "failed_tools": [],
+    "grounding": {
+     "citations": 4,
+     "valid_citations": 4,
+     "downgraded_claims": 0
+    },
+    "trace": [
+     "observability: r1-obs_1 found ['log-13', 'met-03']"
+    ],
+    "usage": {
+     "input_tokens": 14090,
+     "output_tokens": 2687,
+     "thinking_tokens": 1192,
+     "llm_calls": 10,
+     "tool_calls": 11
+    }
+   }
+  },
+  {
+   "t": 15.7,
+   "type": "step",
+   "node": "schedule",
+   "update": {
+    "usage": {
+     "input_tokens": 14090,
+     "output_tokens": 2687,
+     "thinking_tokens": 1192,
+     "llm_calls": 10,
+     "tool_calls": 11
+    }
+   }
+  },
+  {
+   "t": 18.88,
+   "type": "step",
+   "node": "reason",
+   "update": {
+    "hypotheses": [
+     {
+      "id": "H1",
+      "statement": "The accounts service in region us-east suffered an unhandled outage or crashed, causing connection refusals to mobile-gateway.",
+      "category": "dependency_failure",
+      "component": "accounts",
+      "supporting": [
+       "log-13",
+       "met-03",
+       "t-02"
+      ],
+      "contradicting": [],
+      "assumptions": [
+       "accounts service crashed or exhausted listener sockets/connections in us-east around 12:39",
+       "accounts service failure directly caused connection refused errors to mobile-gateway"
+      ]
+     },
+     {
+      "id": "H2",
+      "statement": "Upstream KYC vendor latency cascaded into accounts service thread/resource exhaustion, causing accounts service in us-east to refuse incoming connections.",
+      "category": "dependency_failure",
+      "component": "kyc",
+      "supporting": [
+       "t-13",
+       "log-13",
+       "met-03"
+      ],
+      "contradicting": [],
+      "assumptions": [
+       "Elevated KYC vendor latency caused connection thread exhaustion or failure cascading up through accounts service in us-east"
+      ]
+     },
+     {
+      "id": "H3",
+      "statement": "An unrecorded configuration change or network policy update in us-east blocked mobile-gateway from connecting to accounts.",
+      "category": "config_change",
+      "component": "accounts",
+      "supporting": [
+       "log-13",
+       "met-03"
+      ],
+      "contradicting": [
+       "dep-01"
+      ],
+      "assumptions": [
+       "An unrecorded infra/configuration change or deployment occurred around 12:40 causing accounts service in us-east to go down"
+      ]
+     }
+    ],
+    "grounding": {
+     "citations": 9,
+     "valid_citations": 9,
+     "downgraded_claims": 0
+    },
+    "trace": [
+     "reasoning: proposed ['H1', 'H2', 'H3']"
+    ],
+    "usage": {
+     "input_tokens": 15784,
+     "output_tokens": 3041,
+     "thinking_tokens": 1192,
+     "llm_calls": 11,
+     "tool_calls": 11
+    }
+   }
+  },
+  {
+   "t": 21.51,
+   "type": "step",
+   "node": "verify",
+   "update": {
+    "verification": {
+     "verdicts": [
+      {
+       "hypothesis_id": "H1",
+       "rows": [
+        {
+         "evidence_id": "met-03",
+         "label": "symptom",
+         "reason": "Shows a spike in 5xx error ratio from accounts to mobile-gateway in us-east."
+        },
+        {
+         "evidence_id": "log-13",
+         "label": "supports",
+         "reason": "Confirms connection refusal from accounts service in us-east to mobile-gateway."
+        }
+       ]
+      },
+      {
+       "hypothesis_id": "H2",
+       "rows": [
+        {
+         "evidence_id": "met-03",
+         "label": "symptom",
+         "reason": "Shows elevated 5xx error ratio on mobile-gateway."
+        },
+        {
+         "evidence_id": "log-13",
+         "label": "symptom",
+         "reason": "Shows connection refusal from accounts service."
+        }
+       ]
+      },
+      {
+       "hypothesis_id": "H3",
+       "rows": [
+        {
+         "evidence_id": "met-03",
+         "label": "symptom",
+         "reason": "Shows high 5xx error ratio on mobile-gateway."
+        },
+        {
+         "evidence_id": "log-13",
+         "label": "supports",
+         "reason": "Connection refused log is consistent with potential network policy or port access issues between mobile-gateway and accounts."
+        }
+       ]
+      }
+     ]
+    },
+    "grounding": {
+     "citations": 6,
+     "valid_citations": 6,
+     "downgraded_claims": 0
+    },
+    "trace": [
+     "verifier: labelled evidence"
+    ],
+    "usage": {
+     "input_tokens": 16814,
+     "output_tokens": 3319,
+     "thinking_tokens": 1192,
+     "llm_calls": 12,
+     "tool_calls": 11
+    }
+   }
+  },
+  {
+   "t": 26.06,
+   "type": "step",
+   "node": "criticize",
+   "update": {
+    "critique": {
+     "verdict": "investigate",
+     "objections": [
+      "The leading hypothesis H1 assumes accounts service in us-east suffered an unhandled outage or crash, but logs or metrics directly from the accounts and kyc services have not been retrieved to confirm whether accounts actually crashed, had resource/thread exhaustion from KYC vendor latency, or experienced a network policy issue."
+     ],
+     "requests": [
+      {
+       "agent": "observability",
+       "question": "Are there error, latency, or availability metrics for the 'accounts' service in us-east between 12:30 and 13:10 on 2026-09-21?",
+       "reason": "To verify if the accounts service crashed, became overloaded, or was unreachable due to upstream/downstream issues."
+      },
+      {
+       "agent": "observability",
+       "question": "Are there latency or error metrics for the 'kyc' service between 12:30 and 13:10 on 2026-09-21?",
+       "reason": "To determine if KYC vendor latency directly contributed to thread exhaustion or failures in the accounts service."
+      }
+     ]
+    },
+    "stop_reason": "",
+    "trace": [
+     "critic: investigate, 2 requests"
+    ],
+    "usage": {
+     "input_tokens": 18092,
+     "output_tokens": 3972,
+     "thinking_tokens": 1599,
+     "llm_calls": 13,
+     "tool_calls": 11
+    }
+   }
+  },
+  {
+   "t": 28.61,
+   "type": "step",
+   "node": "orchestrate",
+   "update": {
+    "tasks": {
+     "r2-t-14": {
+      "id": "r2-t-14",
+      "agent": "observability",
+      "question": "Are there error, latency, or availability metrics for the 'accounts' service in us-east between 12:30 and 13:10 on 2026-09-21?",
+      "depends_on": [],
+      "status": "pending",
+      "attempts": 0,
+      "finding": null
+     },
+     "r2-t-15": {
+      "id": "r2-t-15",
+      "agent": "observability",
+      "question": "Are there latency or error metrics for the 'kyc' service between 12:30 and 13:10 on 2026-09-21?",
+      "depends_on": [],
+      "status": "pending",
+      "attempts": 0,
+      "finding": null
+     }
+    },
+    "round": 2,
+    "evidence_seen": 11,
+    "trace": [
+     "orchestrator: round 2, planned: ['r2-t-14', 'r2-t-15']"
+    ],
+    "usage": {
+     "input_tokens": 18799,
+     "output_tokens": 4184,
+     "thinking_tokens": 1662,
+     "llm_calls": 14,
+     "tool_calls": 11
+    }
+   }
+  },
+  {
+   "t": 28.61,
+   "type": "step",
+   "node": "schedule",
+   "update": {
+    "usage": {
+     "input_tokens": 18799,
+     "output_tokens": 4184,
+     "thinking_tokens": 1662,
+     "llm_calls": 14,
+     "tool_calls": 11
+    }
+   }
+  },
+  {
+   "t": 30.51,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_metrics",
+   "args": {
+    "end": "2026-09-21T13:10",
+    "service": "accounts",
+    "region": "us-east",
+    "start": "2026-09-21T12:30"
+   },
+   "status": "ok",
+   "rows": [
+    "met-01"
+   ],
+   "note": "",
+   "seconds": 0.0
+  },
+  {
+   "t": 30.85,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_metrics",
+   "args": {
+    "end": "2026-09-21T13:10",
+    "service": "kyc",
+    "start": "2026-09-21T12:30"
+   },
+   "status": "ok",
+   "rows": [
+    "met-04"
+   ],
+   "note": "",
+   "seconds": 0.01
+  },
+  {
+   "t": 33.9,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_metrics",
+   "args": {
+    "start": "2026-09-21T12:30",
+    "service": "accounts",
+    "end": "2026-09-21T13:10"
+   },
+   "status": "ok",
+   "rows": [
+    "met-01",
+    "met-02"
+   ],
+   "note": "",
+   "seconds": 0.01
+  },
+  {
+   "t": 36.06,
+   "type": "step",
+   "node": "run_task",
+   "update": {
+    "tasks": {
+     "r2-t-15": {
+      "id": "r2-t-15",
+      "agent": "observability",
+      "question": "Are there latency or error metrics for the 'kyc' service between 12:30 and 13:10 on 2026-09-21?",
+      "depends_on": [],
+      "status": "done",
+      "attempts": 0,
+      "finding": {
+       "summary": "Metrics for the 'kyc' service between 12:30 and 13:10 on 2026-09-21 include a high global p99 latency metric (idverify_latency_p99_ms around 2800-2900ms), but no error rate metrics were present for the service during this time window.",
+       "claims": [
+        {
+         "text": "The 'kyc' service has a latency metric 'idverify_latency_p99_ms' in the global region between 12:30 and 13:10 on 2026-09-21, with 10-minute interval values of 2850ms, 2800ms, 2900ms, and 2880ms.",
+         "kind": "fact",
+         "evidence_ids": [
+          "met-04"
+         ]
+        },
+        {
+         "text": "No error metric series were returned for the 'kyc' service between 12:30 and 13:10 on 2026-09-21.",
+         "kind": "inference",
+         "evidence_ids": [
+          "met-04"
+         ]
+        }
+       ],
+       "gaps": []
+      }
+     }
+    },
+    "evidence": {
+     "met-04": {
+      "id": "met-04",
+      "source": "metrics",
+      "content": "{\"id\": \"met-04\", \"service\": \"kyc\", \"metric\": \"idverify_latency_p99_ms\", \"region\": \"global\", \"start\": \"2026-09-21T12:30\", \"step_min\": 10, \"values\": [2850, 2800, 2900, 2880]}"
+     }
+    },
+    "gaps": [],
+    "failed_tools": [],
+    "grounding": {
+     "citations": 2,
+     "valid_citations": 2,
+     "downgraded_claims": 0
+    },
+    "trace": [
+     "observability: r2-t-15 found ['met-04']"
+    ],
+    "usage": {
+     "input_tokens": 23974,
+     "output_tokens": 5678,
+     "thinking_tokens": 2696,
+     "llm_calls": 18,
+     "tool_calls": 14
+    }
+   }
+  },
+  {
+   "t": 36.81,
+   "type": "step",
+   "node": "run_task",
+   "update": {
+    "tasks": {
+     "r2-t-14": {
+      "id": "r2-t-14",
+      "agent": "observability",
+      "question": "Are there error, latency, or availability metrics for the 'accounts' service in us-east between 12:30 and 13:10 on 2026-09-21?",
+      "depends_on": [],
+      "status": "done",
+      "attempts": 0,
+      "finding": {
+       "summary": "No error, latency, or availability metrics exist for the 'accounts' service in us-east between 12:30 and 13:10 on 2026-09-21; the only reported metric for accounts in us-east during this period is 'open_fds'.",
+       "claims": [
+        {
+         "text": "The only metric series returned for the 'accounts' service in us-east between 12:30 and 13:10 on 2026-09-21 is 'open_fds', which reached 65535 starting at 12:40.",
+         "kind": "fact",
+         "evidence_ids": [
+          "met-01"
+         ]
+        },
+        {
+         "text": "There are no error rate, latency, or availability metric series for the 'accounts' service in us-east between 12:30 and 13:10 on 2026-09-21.",
+         "kind": "fact",
+         "evidence_ids": [
+          "met-01"
+         ]
+        }
+       ],
+       "gaps": []
+      }
+     }
+    },
+    "evidence": {
+     "met-01": {
+      "id": "met-01",
+      "source": "metrics",
+      "content": "{\"id\": \"met-01\", \"service\": \"accounts\", \"metric\": \"open_fds\", \"region\": \"us-east\", \"start\": \"2026-09-21T12:30\", \"step_min\": 10, \"values\": [63400, 65535, 65535, 65535]}"
+     },
+     "met-02": {
+      "id": "met-02",
+      "source": "metrics",
+      "content": "{\"id\": \"met-02\", \"service\": \"accounts\", \"metric\": \"open_fds\", \"region\": \"eu-west\", \"start\": \"2026-09-21T12:30\", \"step_min\": 10, \"values\": [8180, 8110, 8140, 8100]}"
+     }
+    },
+    "gaps": [],
+    "failed_tools": [],
+    "grounding": {
+     "citations": 2,
+     "valid_citations": 2,
+     "downgraded_claims": 0
+    },
+    "trace": [
+     "observability: r2-t-14 found ['met-01', 'met-02']"
+    ],
+    "usage": {
+     "input_tokens": 25981,
+     "output_tokens": 6026,
+     "thinking_tokens": 2802,
+     "llm_calls": 19,
+     "tool_calls": 14
+    }
+   }
+  },
+  {
+   "t": 36.81,
+   "type": "step",
+   "node": "schedule",
+   "update": {
+    "usage": {
+     "input_tokens": 25981,
+     "output_tokens": 6026,
+     "thinking_tokens": 2802,
+     "llm_calls": 19,
+     "tool_calls": 14
+    }
+   }
+  },
+  {
+   "t": 44.3,
+   "type": "step",
+   "node": "reason",
+   "update": {
+    "hypotheses": [
+     {
+      "id": "H1",
+      "statement": "File descriptor exhaustion in the accounts service in region us-east caused it to stop accepting incoming TCP connections from mobile-gateway.",
+      "category": "resource_exhaustion",
+      "component": "accounts",
+      "supporting": [
+       "met-01",
+       "log-13"
+      ],
+      "contradicting": [
+       "met-02"
+      ],
+      "assumptions": [
+       "The accounts service process reached its maximum operating system file descriptor limit (65535), preventing it from accepting new incoming TCP connections from mobile-gateway."
+      ]
+     },
+     {
+      "id": "H2",
+      "statement": "Elevated latency in the downstream KYC service caused connection socket backlog and resource exhaustion in the accounts service.",
+      "category": "dependency_failure",
+      "component": "kyc",
+      "supporting": [
+       "met-04",
+       "t-13"
+      ],
+      "contradicting": [
+       "met-02"
+      ],
+      "assumptions": [
+       "High latency in the KYC service (p99 ~2.8s) caused accounts service requests to back up, holding open sockets until connection limits/file descriptors were exhausted in us-east."
+      ]
+     },
+     {
+      "id": "H3",
+      "statement": "An unlogged software deployment or configuration update in us-east caused the accounts service failure.",
+      "category": "bad_deploy",
+      "component": "accounts",
+      "supporting": [],
+      "contradicting": [
+       "dep-01"
+      ],
+      "assumptions": [
+       "An unrecorded software deployment or configuration change to the accounts service or its host environment occurred around 12:40 on 2026-09-21."
+      ]
+     }
+    ],
+    "grounding": {
+     "citations": 7,
+     "valid_citations": 7,
+     "downgraded_claims": 0
+    },
+    "trace": [
+     "reasoning: proposed ['H1', 'H2', 'H3']"
+    ],
+    "usage": {
+     "input_tokens": 28507,
+     "output_tokens": 7277,
+     "thinking_tokens": 3697,
+     "llm_calls": 20,
+     "tool_calls": 14
+    }
+   }
+  },
+  {
+   "t": 47.93,
+   "type": "step",
+   "node": "verify",
+   "update": {
+    "verification": {
+     "verdicts": [
+      {
+       "hypothesis_id": "H1",
+       "rows": [
+        {
+         "evidence_id": "met-01",
+         "label": "supports",
+         "reason": "open_fds in us-east accounts service reaches maximum limit (65535) at 12:40."
+        },
+        {
+         "evidence_id": "log-13",
+         "label": "symptom",
+         "reason": "Shows upstream accounts connection refused from mobile-gateway without indicating root cause."
+        },
+        {
+         "evidence_id": "met-03",
+         "label": "symptom",
+         "reason": "Shows elevated 5xx error ratio from mobile-gateway to accounts."
+        }
+       ]
+      },
+      {
+       "hypothesis_id": "H2",
+       "rows": [
+        {
+         "evidence_id": "met-04",
+         "label": "contradicts",
+         "reason": "kyc latency remains constant (~2800-2900ms) with no elevated latency spike around incident start."
+        },
+        {
+         "evidence_id": "met-01",
+         "label": "symptom",
+         "reason": "Shows resource exhaustion in accounts service but does not attribute it to kyc."
+        },
+        {
+         "evidence_id": "log-13",
+         "label": "symptom",
+         "reason": "Shows connection refused errors resulting from accounts service failure."
+        },
+        {
+         "evidence_id": "met-03",
+         "label": "symptom",
+         "reason": "Shows elevated error rates downstream of the accounts service."
+        }
+       ]
+      },
+      {
+       "hypothesis_id": "H3",
+       "rows": [
+        {
+         "evidence_id": "dep-01",
+         "label": "contradicts",
+         "reason": "The last logged deployment for accounts-svc occurred on 2026-09-14, a week prior to the incident."
+        },
+        {
+         "evidence_id": "met-01",
+         "label": "symptom",
+         "reason": "Shows file descriptor exhaustion in accounts service without indicating a software deployment or config change cause."
+        },
+        {
+         "evidence_id": "log-13",
+         "label": "symptom",
+         "reason": "Shows connection refusal symptoms in mobile-gateway."
+        },
+        {
+         "evidence_id": "met-03",
+         "label": "symptom",
+         "reason": "Shows generic 5xx error ratio spike."
+        }
+       ]
+      }
+     ]
+    },
+    "grounding": {
+     "citations": 11,
+     "valid_citations": 11,
+     "downgraded_claims": 0
+    },
+    "trace": [
+     "verifier: labelled evidence"
+    ],
+    "usage": {
+     "input_tokens": 29809,
+     "output_tokens": 7768,
+     "thinking_tokens": 3697,
+     "llm_calls": 21,
+     "tool_calls": 14
+    }
+   }
+  },
+  {
+   "t": 51.91,
+   "type": "step",
+   "node": "criticize",
+   "update": {
+    "critique": {
+     "verdict": "accept",
+     "objections": [],
+     "requests": []
+    },
+    "stop_reason": "critic_accepted",
+    "trace": [
+     "critic: accept, 0 requests"
+    ],
+    "usage": {
+     "input_tokens": 31365,
+     "output_tokens": 8310,
+     "thinking_tokens": 4216,
+     "llm_calls": 22,
+     "tool_calls": 14
+    }
+   }
+  },
+  {
+   "t": 54.47,
+   "type": "step",
+   "node": "finalize",
+   "update": {
+    "report": {
+     "incident_id": "BLIND-15",
+     "outcome": "inconclusive",
+     "stop_reason": "critic_accepted",
+     "summary": "The investigation into account summary errors for US customers remains inconclusive due to low confidence across all hypotheses and missing log telemetry. Primary hypotheses include file descriptor exhaustion in the accounts service (H1), resource exhaustion driven by downstream KYC vendor latency (H2), and unlogged software or configuration updates in us-east (H3). Further evidence is needed to confirm the root cause.",
+     "hypotheses": [
+      {
+       "id": "H1",
+       "statement": "File descriptor exhaustion in the accounts service in region us-east caused it to stop accepting incoming TCP connections from mobile-gateway.",
+       "category": "resource_exhaustion",
+       "component": "accounts",
+       "supporting": [
+        "met-01",
+        "log-13"
+       ],
+       "contradicting": [
+        "met-02"
+       ],
+       "assumptions": [
+        "The accounts service process reached its maximum operating system file descriptor limit (65535), preventing it from accepting new incoming TCP connections from mobile-gateway."
+       ],
+       "verified_supporting": [
+        "met-01"
+       ],
+       "verified_contradicting": [],
+       "verified_ratio": 0.5,
+       "net_support": 1,
+       "confidence": "low",
+       "row_labels": {
+        "met-01": "supports",
+        "log-13": "symptom",
+        "met-03": "symptom"
+       }
+      },
+      {
+       "id": "H2",
+       "statement": "Elevated latency in the downstream KYC service caused connection socket backlog and resource exhaustion in the accounts service.",
+       "category": "dependency_failure",
+       "component": "kyc",
+       "supporting": [
+        "met-04",
+        "t-13"
+       ],
+       "contradicting": [
+        "met-02"
+       ],
+       "assumptions": [
+        "High latency in the KYC service (p99 ~2.8s) caused accounts service requests to back up, holding open sockets until connection limits/file descriptors were exhausted in us-east."
+       ],
+       "verified_supporting": [],
+       "verified_contradicting": [
+        "met-04"
+       ],
+       "verified_ratio": 0.0,
+       "net_support": -1,
+       "confidence": "low",
+       "row_labels": {
+        "met-04": "contradicts",
+        "met-01": "symptom",
+        "log-13": "symptom",
+        "met-03": "symptom"
+       }
+      },
+      {
+       "id": "H3",
+       "statement": "An unlogged software deployment or configuration update in us-east caused the accounts service failure.",
+       "category": "bad_deploy",
+       "component": "accounts",
+       "supporting": [],
+       "contradicting": [
+        "dep-01"
+       ],
+       "assumptions": [
+        "An unrecorded software deployment or configuration change to the accounts service or its host environment occurred around 12:40 on 2026-09-21."
+       ],
+       "verified_supporting": [],
+       "verified_contradicting": [
+        "dep-01"
+       ],
+       "verified_ratio": 0.0,
+       "net_support": -1,
+       "confidence": "low",
+       "row_labels": {
+        "dep-01": "contradicts",
+        "met-01": "symptom",
+        "log-13": "symptom",
+        "met-03": "symptom"
+       }
+      }
+     ],
+     "facts": [
+      {
+       "text": "Between 12:30 and 13:15 on 2026-09-21, the mobile-gateway service reported elevated accounts_5xx_ratio in region us-east, rising from 0.08 at 12:30 to 0.61 at 12:40, 0.66 at 12:50, and 0.64 at 13:00.",
+       "kind": "fact",
+       "evidence_ids": [
+        "met-03"
+       ]
+      },
+      {
+       "text": "At 12:39 on 2026-09-21, mobile-gateway logged a WARN message: 'upstream accounts connection refused region=us-east'.",
+       "kind": "fact",
+       "evidence_ids": [
+        "log-13"
+       ]
+      },
+      {
+       "text": "mobile-gateway directly depends on auth, accounts, payments, cards, and statements services.",
+       "kind": "fact",
+       "evidence_ids": [
+        "t-01",
+        "t-02",
+        "t-03",
+        "t-04",
+        "t-05"
+       ]
+      },
+      {
+       "text": "The accounts service depends on the kyc service, linking account functionality to the KYC integration.",
+       "kind": "fact",
+       "evidence_ids": [
+        "t-13"
+       ]
+      },
+      {
+       "text": "No deployments or configuration changes were recorded on 2026-09-21. The most recent recorded deployment across services was for accounts-svc (v6.5.0) on 2026-09-14T11:00.",
+       "kind": "fact",
+       "evidence_ids": [
+        "dep-01"
+       ]
+      },
+      {
+       "text": "A past incident on 2026-05-15 involved KYC onboarding failures after a KYC v1.7 deployment mis-parsed passport MRZ data.",
+       "kind": "fact",
+       "evidence_ids": [
+        "his-01"
+       ]
+      },
+      {
+       "text": "The only metric series returned for the 'accounts' service in us-east between 12:30 and 13:10 on 2026-09-21 is 'open_fds', which reached 65535 starting at 12:40.",
+       "kind": "fact",
+       "evidence_ids": [
+        "met-01"
+       ]
+      },
+      {
+       "text": "There are no error rate, latency, or availability metric series for the 'accounts' service in us-east between 12:30 and 13:10 on 2026-09-21.",
+       "kind": "fact",
+       "evidence_ids": [
+        "met-01"
+       ]
+      },
+      {
+       "text": "The 'kyc' service has a latency metric 'idverify_latency_p99_ms' in the global region between 12:30 and 13:10 on 2026-09-21, with 10-minute interval values of 2850ms, 2800ms, 2900ms, and 2880ms.",
+       "kind": "fact",
+       "evidence_ids": [
+        "met-04"
+       ]
+      }
+     ],
+     "assumptions": [
+      {
+       "text": "The accounts service process reached its maximum operating system file descriptor limit (65535), preventing it from accepting new incoming TCP connections from mobile-gateway.",
+       "kind": "assumption",
+       "evidence_ids": []
+      },
+      {
+       "text": "High latency in the KYC service (p99 ~2.8s) caused accounts service requests to back up, holding open sockets until connection limits/file descriptors were exhausted in us-east.",
+       "kind": "assumption",
+       "evidence_ids": []
+      },
+      {
+       "text": "An unrecorded software deployment or configuration change to the accounts service or its host environment occurred around 12:40 on 2026-09-21.",
+       "kind": "assumption",
+       "evidence_ids": []
+      }
+     ],
+     "gaps": [
+      "Log queries for service 'accounts' and 'kyc-service' returned no matching rows, and additional service name variations could not be fully queried due to tool invocation limits.",
+      "No direct deployment or configuration update logs were found specifically around 12:40 on 2026-09-21."
+     ],
+     "actions": [
+      {
+       "description": "Query logs using additional service name variations and verify telemetry configuration for accounts and KYC services to gather missing error/latency logs.",
+       "risk": "low",
+       "hypothesis_id": "",
+       "requires_human_approval": true
+      },
+      {
+       "description": "Check host-level socket/file descriptor metrics and connection queue states on accounts service instances in us-east.",
+       "risk": "low",
+       "hypothesis_id": "",
+       "requires_human_approval": true
+      },
+      {
+       "description": "Review infrastructure and deployment audit logs outside standard deployment history around 12:40 UTC.",
+       "risk": "low",
+       "hypothesis_id": "",
+       "requires_human_approval": true
+      }
+     ],
+     "usage": {
+      "input_tokens": 31950,
+      "output_tokens": 8520,
+      "thinking_tokens": 4216,
+      "llm_calls": 23,
+      "tool_calls": 14
+     },
+     "usage_by_agent": {
+      "orchestrator": {
+       "input_tokens": 1101,
+       "output_tokens": 502,
+       "thinking_tokens": 195,
+       "llm_calls": 2,
+       "tool_calls": 0
+      },
+      "dependency": {
+       "input_tokens": 5105,
+       "output_tokens": 826,
+       "thinking_tokens": 377,
+       "llm_calls": 4,
+       "tool_calls": 0
+      },
+      "observability": {
+       "input_tokens": 15773,
+       "output_tokens": 3413,
+       "thinking_tokens": 1823,
+       "llm_calls": 10,
+       "tool_calls": 0
+      },
+      "reasoning": {
+       "input_tokens": 4220,
+       "output_tokens": 1605,
+       "thinking_tokens": 895,
+       "llm_calls": 2,
+       "tool_calls": 0
+      },
+      "verifier": {
+       "input_tokens": 2332,
+       "output_tokens": 769,
+       "thinking_tokens": 0,
+       "llm_calls": 2,
+       "tool_calls": 0
+      },
+      "critic": {
+       "input_tokens": 2834,
+       "output_tokens": 1195,
+       "thinking_tokens": 926,
+       "llm_calls": 2,
+       "tool_calls": 0
+      },
+      "reporting": {
+       "input_tokens": 585,
+       "output_tokens": 210,
+       "thinking_tokens": 0,
+       "llm_calls": 1,
+       "tool_calls": 0
+      }
+     },
+     "grounding": {
+      "citations": 49,
+      "valid_citations": 49,
+      "downgraded_claims": 0
+     },
+     "incident": {
+      "id": "BLIND-15",
+      "title": "Account summary errors for US customers",
+      "description": "US customers see errors loading balances since about 12:40. KYC vendor latency has also been elevated today.",
+      "service": "mobile-gateway",
+      "reported_at": "2026-09-21T13:10"
+     },
+     "evidence": [
+      {
+       "id": "met-03",
+       "source": "metrics",
+       "content": "{\"id\": \"met-03\", \"service\": \"mobile-gateway\", \"metric\": \"accounts_5xx_ratio\", \"region\": \"us-east\", \"start\": \"2026-09-21T12:30\", \"step_min\": 10, \"values\": [0.08, 0.61, 0.66, 0.64]}"
+      },
+      {
+       "id": "log-13",
+       "source": "logs",
+       "content": "{\"id\": \"log-13\", \"ts\": \"2026-09-21T12:39\", \"service\": \"mobile-gateway\", \"level\": \"WARN\", \"msg\": \"upstream accounts connection refused region=us-east\"}"
+      },
+      {
+       "id": "t-01",
+       "source": "dependencies",
+       "content": "{\"id\": \"t-01\", \"service\": \"mobile-gateway\", \"depends_on\": \"auth\"}"
+      },
+      {
+       "id": "t-02",
+       "source": "dependencies",
+       "content": "{\"id\": \"t-02\", \"service\": \"mobile-gateway\", \"depends_on\": \"accounts\"}"
+      },
+      {
+       "id": "t-03",
+       "source": "dependencies",
+       "content": "{\"id\": \"t-03\", \"service\": \"mobile-gateway\", \"depends_on\": \"payments\"}"
+      },
+      {
+       "id": "t-04",
+       "source": "dependencies",
+       "content": "{\"id\": \"t-04\", \"service\": \"mobile-gateway\", \"depends_on\": \"cards\"}"
+      },
+      {
+       "id": "t-05",
+       "source": "dependencies",
+       "content": "{\"id\": \"t-05\", \"service\": \"mobile-gateway\", \"depends_on\": \"statements\"}"
+      },
+      {
+       "id": "dep-01",
+       "source": "deployments",
+       "content": "{\"id\": \"dep-01\", \"ts\": \"2026-09-14T11:00\", \"service\": \"accounts-svc\", \"kind\": \"deploy\", \"detail\": \"v6.5.0: account nickname editing\"}"
+      },
+      {
+       "id": "his-01",
+       "source": "history",
+       "content": "{\"id\": \"his-01\", \"summary\": \"2026-05-15 kyc onboarding failures after kyc v1.7 deploy mis-parsed passport MRZ\"}"
+      },
+      {
+       "id": "t-12",
+       "source": "dependencies",
+       "content": "{\"id\": \"t-12\", \"service\": \"accounts\", \"depends_on\": \"ledger\"}"
+      },
+      {
+       "id": "t-13",
+       "source": "dependencies",
+       "content": "{\"id\": \"t-13\", \"service\": \"accounts\", \"depends_on\": \"kyc\"}"
+      },
+      {
+       "id": "met-01",
+       "source": "metrics",
+       "content": "{\"id\": \"met-01\", \"service\": \"accounts\", \"metric\": \"open_fds\", \"region\": \"us-east\", \"start\": \"2026-09-21T12:30\", \"step_min\": 10, \"values\": [63400, 65535, 65535, 65535]}"
+      },
+      {
+       "id": "met-02",
+       "source": "metrics",
+       "content": "{\"id\": \"met-02\", \"service\": \"accounts\", \"metric\": \"open_fds\", \"region\": \"eu-west\", \"start\": \"2026-09-21T12:30\", \"step_min\": 10, \"values\": [8180, 8110, 8140, 8100]}"
+      },
+      {
+       "id": "met-04",
+       "source": "metrics",
+       "content": "{\"id\": \"met-04\", \"service\": \"kyc\", \"metric\": \"idverify_latency_p99_ms\", \"region\": \"global\", \"start\": \"2026-09-21T12:30\", \"step_min\": 10, \"values\": [2850, 2800, 2900, 2880]}"
+      }
+     ],
+     "outcome_reasons": [
+      "the top hypothesis has low confidence"
+     ],
+     "inferences": [
+      {
+       "text": "The 5xx errors affecting US customers on mobile-gateway starting around 12:40 coincide with connection refusals from the upstream accounts service in the us-east region.",
+       "kind": "inference",
+       "evidence_ids": [
+        "log-13",
+        "met-03"
+       ]
+      },
+      {
+       "text": "No error metric series were returned for the 'kyc' service between 12:30 and 13:10 on 2026-09-21.",
+       "kind": "inference",
+       "evidence_ids": [
+        "met-04"
+       ]
+      }
+     ]
+    },
+    "usage": {
+     "input_tokens": 31950,
+     "output_tokens": 8520,
+     "thinking_tokens": 4216,
+     "llm_calls": 23,
+     "tool_calls": 14
+    },
+    "trace": [
+     "reporting: inconclusive"
+    ]
+   }
+  }
+ ],
+ "report": {
+  "incident_id": "BLIND-15",
+  "outcome": "inconclusive",
+  "stop_reason": "critic_accepted",
+  "summary": "The investigation into account summary errors for US customers remains inconclusive due to low confidence across all hypotheses and missing log telemetry. Primary hypotheses include file descriptor exhaustion in the accounts service (H1), resource exhaustion driven by downstream KYC vendor latency (H2), and unlogged software or configuration updates in us-east (H3). Further evidence is needed to confirm the root cause.",
+  "hypotheses": [
+   {
+    "id": "H1",
+    "statement": "File descriptor exhaustion in the accounts service in region us-east caused it to stop accepting incoming TCP connections from mobile-gateway.",
+    "category": "resource_exhaustion",
+    "component": "accounts",
+    "supporting": [
+     "met-01",
+     "log-13"
+    ],
+    "contradicting": [
+     "met-02"
+    ],
+    "assumptions": [
+     "The accounts service process reached its maximum operating system file descriptor limit (65535), preventing it from accepting new incoming TCP connections from mobile-gateway."
+    ],
+    "verified_supporting": [
+     "met-01"
+    ],
+    "verified_contradicting": [],
+    "verified_ratio": 0.5,
+    "net_support": 1,
+    "confidence": "low",
+    "row_labels": {
+     "met-01": "supports",
+     "log-13": "symptom",
+     "met-03": "symptom"
+    }
+   },
+   {
+    "id": "H2",
+    "statement": "Elevated latency in the downstream KYC service caused connection socket backlog and resource exhaustion in the accounts service.",
+    "category": "dependency_failure",
+    "component": "kyc",
+    "supporting": [
+     "met-04",
+     "t-13"
+    ],
+    "contradicting": [
+     "met-02"
+    ],
+    "assumptions": [
+     "High latency in the KYC service (p99 ~2.8s) caused accounts service requests to back up, holding open sockets until connection limits/file descriptors were exhausted in us-east."
+    ],
+    "verified_supporting": [],
+    "verified_contradicting": [
+     "met-04"
+    ],
+    "verified_ratio": 0.0,
+    "net_support": -1,
+    "confidence": "low",
+    "row_labels": {
+     "met-04": "contradicts",
+     "met-01": "symptom",
+     "log-13": "symptom",
+     "met-03": "symptom"
+    }
+   },
+   {
+    "id": "H3",
+    "statement": "An unlogged software deployment or configuration update in us-east caused the accounts service failure.",
+    "category": "bad_deploy",
+    "component": "accounts",
+    "supporting": [],
+    "contradicting": [
+     "dep-01"
+    ],
+    "assumptions": [
+     "An unrecorded software deployment or configuration change to the accounts service or its host environment occurred around 12:40 on 2026-09-21."
+    ],
+    "verified_supporting": [],
+    "verified_contradicting": [
+     "dep-01"
+    ],
+    "verified_ratio": 0.0,
+    "net_support": -1,
+    "confidence": "low",
+    "row_labels": {
+     "dep-01": "contradicts",
+     "met-01": "symptom",
+     "log-13": "symptom",
+     "met-03": "symptom"
+    }
+   }
+  ],
+  "facts": [
+   {
+    "text": "Between 12:30 and 13:15 on 2026-09-21, the mobile-gateway service reported elevated accounts_5xx_ratio in region us-east, rising from 0.08 at 12:30 to 0.61 at 12:40, 0.66 at 12:50, and 0.64 at 13:00.",
+    "kind": "fact",
+    "evidence_ids": [
+     "met-03"
+    ]
+   },
+   {
+    "text": "At 12:39 on 2026-09-21, mobile-gateway logged a WARN message: 'upstream accounts connection refused region=us-east'.",
+    "kind": "fact",
+    "evidence_ids": [
+     "log-13"
+    ]
+   },
+   {
+    "text": "mobile-gateway directly depends on auth, accounts, payments, cards, and statements services.",
+    "kind": "fact",
+    "evidence_ids": [
+     "t-01",
+     "t-02",
+     "t-03",
+     "t-04",
+     "t-05"
+    ]
+   },
+   {
+    "text": "The accounts service depends on the kyc service, linking account functionality to the KYC integration.",
+    "kind": "fact",
+    "evidence_ids": [
+     "t-13"
+    ]
+   },
+   {
+    "text": "No deployments or configuration changes were recorded on 2026-09-21. The most recent recorded deployment across services was for accounts-svc (v6.5.0) on 2026-09-14T11:00.",
+    "kind": "fact",
+    "evidence_ids": [
+     "dep-01"
+    ]
+   },
+   {
+    "text": "A past incident on 2026-05-15 involved KYC onboarding failures after a KYC v1.7 deployment mis-parsed passport MRZ data.",
+    "kind": "fact",
+    "evidence_ids": [
+     "his-01"
+    ]
+   },
+   {
+    "text": "The only metric series returned for the 'accounts' service in us-east between 12:30 and 13:10 on 2026-09-21 is 'open_fds', which reached 65535 starting at 12:40.",
+    "kind": "fact",
+    "evidence_ids": [
+     "met-01"
+    ]
+   },
+   {
+    "text": "There are no error rate, latency, or availability metric series for the 'accounts' service in us-east between 12:30 and 13:10 on 2026-09-21.",
+    "kind": "fact",
+    "evidence_ids": [
+     "met-01"
+    ]
+   },
+   {
+    "text": "The 'kyc' service has a latency metric 'idverify_latency_p99_ms' in the global region between 12:30 and 13:10 on 2026-09-21, with 10-minute interval values of 2850ms, 2800ms, 2900ms, and 2880ms.",
+    "kind": "fact",
+    "evidence_ids": [
+     "met-04"
+    ]
+   }
+  ],
+  "assumptions": [
+   {
+    "text": "The accounts service process reached its maximum operating system file descriptor limit (65535), preventing it from accepting new incoming TCP connections from mobile-gateway.",
+    "kind": "assumption",
+    "evidence_ids": []
+   },
+   {
+    "text": "High latency in the KYC service (p99 ~2.8s) caused accounts service requests to back up, holding open sockets until connection limits/file descriptors were exhausted in us-east.",
+    "kind": "assumption",
+    "evidence_ids": []
+   },
+   {
+    "text": "An unrecorded software deployment or configuration change to the accounts service or its host environment occurred around 12:40 on 2026-09-21.",
+    "kind": "assumption",
+    "evidence_ids": []
+   }
+  ],
+  "gaps": [
+   "Log queries for service 'accounts' and 'kyc-service' returned no matching rows, and additional service name variations could not be fully queried due to tool invocation limits.",
+   "No direct deployment or configuration update logs were found specifically around 12:40 on 2026-09-21."
+  ],
+  "actions": [
+   {
+    "description": "Query logs using additional service name variations and verify telemetry configuration for accounts and KYC services to gather missing error/latency logs.",
+    "risk": "low",
+    "hypothesis_id": "",
+    "requires_human_approval": true
+   },
+   {
+    "description": "Check host-level socket/file descriptor metrics and connection queue states on accounts service instances in us-east.",
+    "risk": "low",
+    "hypothesis_id": "",
+    "requires_human_approval": true
+   },
+   {
+    "description": "Review infrastructure and deployment audit logs outside standard deployment history around 12:40 UTC.",
+    "risk": "low",
+    "hypothesis_id": "",
+    "requires_human_approval": true
+   }
+  ],
+  "usage": {
+   "input_tokens": 31950,
+   "output_tokens": 8520,
+   "thinking_tokens": 4216,
+   "llm_calls": 23,
+   "tool_calls": 14
+  },
+  "usage_by_agent": {
+   "orchestrator": {
+    "input_tokens": 1101,
+    "output_tokens": 502,
+    "thinking_tokens": 195,
+    "llm_calls": 2,
+    "tool_calls": 0
+   },
+   "dependency": {
+    "input_tokens": 5105,
+    "output_tokens": 826,
+    "thinking_tokens": 377,
+    "llm_calls": 4,
+    "tool_calls": 0
+   },
+   "observability": {
+    "input_tokens": 15773,
+    "output_tokens": 3413,
+    "thinking_tokens": 1823,
+    "llm_calls": 10,
+    "tool_calls": 0
+   },
+   "reasoning": {
+    "input_tokens": 4220,
+    "output_tokens": 1605,
+    "thinking_tokens": 895,
+    "llm_calls": 2,
+    "tool_calls": 0
+   },
+   "verifier": {
+    "input_tokens": 2332,
+    "output_tokens": 769,
+    "thinking_tokens": 0,
+    "llm_calls": 2,
+    "tool_calls": 0
+   },
+   "critic": {
+    "input_tokens": 2834,
+    "output_tokens": 1195,
+    "thinking_tokens": 926,
+    "llm_calls": 2,
+    "tool_calls": 0
+   },
+   "reporting": {
+    "input_tokens": 585,
+    "output_tokens": 210,
+    "thinking_tokens": 0,
+    "llm_calls": 1,
+    "tool_calls": 0
+   }
+  },
+  "grounding": {
+   "citations": 49,
+   "valid_citations": 49,
+   "downgraded_claims": 0
+  },
+  "incident": {
+   "id": "BLIND-15",
+   "title": "Account summary errors for US customers",
+   "description": "US customers see errors loading balances since about 12:40. KYC vendor latency has also been elevated today.",
+   "service": "mobile-gateway",
+   "reported_at": "2026-09-21T13:10"
+  },
+  "evidence": [
+   {
+    "id": "met-03",
+    "source": "metrics",
+    "content": "{\"id\": \"met-03\", \"service\": \"mobile-gateway\", \"metric\": \"accounts_5xx_ratio\", \"region\": \"us-east\", \"start\": \"2026-09-21T12:30\", \"step_min\": 10, \"values\": [0.08, 0.61, 0.66, 0.64]}"
+   },
+   {
+    "id": "log-13",
+    "source": "logs",
+    "content": "{\"id\": \"log-13\", \"ts\": \"2026-09-21T12:39\", \"service\": \"mobile-gateway\", \"level\": \"WARN\", \"msg\": \"upstream accounts connection refused region=us-east\"}"
+   },
+   {
+    "id": "t-01",
+    "source": "dependencies",
+    "content": "{\"id\": \"t-01\", \"service\": \"mobile-gateway\", \"depends_on\": \"auth\"}"
+   },
+   {
+    "id": "t-02",
+    "source": "dependencies",
+    "content": "{\"id\": \"t-02\", \"service\": \"mobile-gateway\", \"depends_on\": \"accounts\"}"
+   },
+   {
+    "id": "t-03",
+    "source": "dependencies",
+    "content": "{\"id\": \"t-03\", \"service\": \"mobile-gateway\", \"depends_on\": \"payments\"}"
+   },
+   {
+    "id": "t-04",
+    "source": "dependencies",
+    "content": "{\"id\": \"t-04\", \"service\": \"mobile-gateway\", \"depends_on\": \"cards\"}"
+   },
+   {
+    "id": "t-05",
+    "source": "dependencies",
+    "content": "{\"id\": \"t-05\", \"service\": \"mobile-gateway\", \"depends_on\": \"statements\"}"
+   },
+   {
+    "id": "dep-01",
+    "source": "deployments",
+    "content": "{\"id\": \"dep-01\", \"ts\": \"2026-09-14T11:00\", \"service\": \"accounts-svc\", \"kind\": \"deploy\", \"detail\": \"v6.5.0: account nickname editing\"}"
+   },
+   {
+    "id": "his-01",
+    "source": "history",
+    "content": "{\"id\": \"his-01\", \"summary\": \"2026-05-15 kyc onboarding failures after kyc v1.7 deploy mis-parsed passport MRZ\"}"
+   },
+   {
+    "id": "t-12",
+    "source": "dependencies",
+    "content": "{\"id\": \"t-12\", \"service\": \"accounts\", \"depends_on\": \"ledger\"}"
+   },
+   {
+    "id": "t-13",
+    "source": "dependencies",
+    "content": "{\"id\": \"t-13\", \"service\": \"accounts\", \"depends_on\": \"kyc\"}"
+   },
+   {
+    "id": "met-01",
+    "source": "metrics",
+    "content": "{\"id\": \"met-01\", \"service\": \"accounts\", \"metric\": \"open_fds\", \"region\": \"us-east\", \"start\": \"2026-09-21T12:30\", \"step_min\": 10, \"values\": [63400, 65535, 65535, 65535]}"
+   },
+   {
+    "id": "met-02",
+    "source": "metrics",
+    "content": "{\"id\": \"met-02\", \"service\": \"accounts\", \"metric\": \"open_fds\", \"region\": \"eu-west\", \"start\": \"2026-09-21T12:30\", \"step_min\": 10, \"values\": [8180, 8110, 8140, 8100]}"
+   },
+   {
+    "id": "met-04",
+    "source": "metrics",
+    "content": "{\"id\": \"met-04\", \"service\": \"kyc\", \"metric\": \"idverify_latency_p99_ms\", \"region\": \"global\", \"start\": \"2026-09-21T12:30\", \"step_min\": 10, \"values\": [2850, 2800, 2900, 2880]}"
+   }
+  ],
+  "outcome_reasons": [
+   "the top hypothesis has low confidence"
+  ],
+  "inferences": [
+   {
+    "text": "The 5xx errors affecting US customers on mobile-gateway starting around 12:40 coincide with connection refusals from the upstream accounts service in the us-east region.",
+    "kind": "inference",
+    "evidence_ids": [
+     "log-13",
+     "met-03"
+    ]
+   },
+   {
+    "text": "No error metric series were returned for the 'kyc' service between 12:30 and 13:10 on 2026-09-21.",
+    "kind": "inference",
+    "evidence_ids": [
+     "met-04"
+    ]
+   }
+  ]
+ },
+ "seconds": 54.5
+}
