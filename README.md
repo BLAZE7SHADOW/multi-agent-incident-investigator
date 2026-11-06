@@ -69,8 +69,22 @@ To change provider, change these values. No code changes are needed, for example
 | Calibration and cost report | `uv run python -m reliability.analysis` | No |
 | Check for regressions | `uv run python -m reliability.regression` | No |
 | Count coverage by category and difficulty | `uv run python -m reliability.coverage` | No |
+| Open the results viewer | `cd frontend && npm install && npm run dev` | No |
+| Refresh the viewer's data after new results | `uv run python -m evals.export_web` | No |
 
 Evaluations stop starting new runs at `--max-tokens`, 2M by default. Runs already in progress still finish.
+
+### Results viewer
+
+A small React app in `frontend/` shows the saved results. It makes no model calls and needs no backend.
+
+| Page | Shows |
+|---|---|
+| Overview | Both evaluations side by side, with every incident's runs |
+| Incidents | Any of the 36 incidents: its logs, metric charts, changes and past incidents, what each system concluded, and a button to reveal the correct answer |
+| Offline checks | Rule evaluation, metamorphic tests and coverage |
+
+Run `cd frontend && npm install && npm run dev`, then open the address it prints. It reads `frontend/public/data.json`, which `evals.export_web` writes from the saved results. CI fails if that file is out of date.
 
 ### Sample output
 
@@ -510,13 +524,14 @@ reliability/        Extras: safety, offline evals, calibration, regression gate,
 tests/core/         Tests for the core
 tests/reliability/  Tests for the extras
 cli.py              Investigate one incident
+frontend/           Results viewer (React and Vite)
 ```
 
 The core does not import the extras, and a test enforces this. `cli.py` and `evals` both use `reliability/`, so redaction and the risky-action flag are on in every reported result.
 
 ### Continuous integration
 
-GitHub Actions runs lint, format checks and all tests on every push, using fake models. It needs no API key and makes no model calls. See `.github/workflows/ci.yml`.
+GitHub Actions runs lint, format checks and all tests on every push, using fake models, checks the viewer's data is current, and builds the viewer. It needs no API key and makes no model calls. See `.github/workflows/ci.yml`.
 
 ### External dependencies
 
@@ -527,5 +542,6 @@ GitHub Actions runs lint, format checks and all tests on every push, using fake 
 | LangChain | Agents, provider switching, middleware | Yes |
 | SQLite, through `langgraph-checkpoint-sqlite` | Crash recovery | Yes |
 | Pydantic, PyYAML, python-dotenv | Data contracts, test sets, settings | Yes |
+| React and Vite, with Node.js 22 | Results viewer | Only for the viewer |
 
 Incident text and tool output are sent to the LLM provider after redaction. Check your provider's data terms before using real logs, because free tiers may allow providers to use your data.
