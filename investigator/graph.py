@@ -493,12 +493,17 @@ async def investigate(
     thread_id: str | None = None,
     action_policy: ActionPolicy | None = None,
     resume: bool = False,
+    on_step: Callable[[str, dict], None] | None = None,
+    callbacks: Sequence = (),
 ) -> Report:
-    """Run an investigation to a report. With `resume`, continue `thread_id` from its checkpoint."""
+    """Run an investigation to a report. With `resume`, continue `thread_id` from its checkpoint.
+
+    `on_step` receives each workflow step's name and update as it finishes, for traces.
+    """
     limits = budget.limits
     config = {
         "configurable": {"thread_id": thread_id or incident.id},
-        "callbacks": [budget],
+        "callbacks": [budget, *callbacks],
         "recursion_limit": limits.max_rounds * (2 * limits.max_tasks_per_round + 6) + 10,
     }
     async with aiosqlite.connect(db_path) as connection:
@@ -509,5 +514,11 @@ async def investigate(
             snapshot = await app.aget_state(config)
             budget.usage = snapshot.values.get("usage", budget.usage)
             initial = None
-        result = await app.ainvoke(initial, config)
+        if on_step is None:
+            result = await app.ainvoke(initial, config)
+        else:
+            async for chunk in app.astream(initial, config, stream_mode="updates"):
+                for node, update in chunk.items():
+                    on_step(node, update or {})
+            result = (await app.aget_state(config)).values
     return result["report"]

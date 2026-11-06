@@ -1,0 +1,1784 @@
+{
+ "incident": {
+  "id": "INC-03",
+  "title": "Carts emptying during checkout",
+  "description": "Customers lose their carts mid checkout. A checkout deploy went out around the same time.",
+  "service": "checkout",
+  "reported_at": "2026-03-12T11:15"
+ },
+ "scenario": "Harmless deploy close in time to the real cause",
+ "tags": [
+  "misleading_timing"
+ ],
+ "truth": {
+  "outcome": "conclusive",
+  "category": "resource_exhaustion",
+  "component": "redis",
+  "key_evidence": [
+   "log-03",
+   "met-02",
+   "met-03"
+  ],
+  "trap_component": "checkout"
+ },
+ "world": {
+  "logs": [
+   {
+    "id": "log-01",
+    "ts": "2026-03-12T10:57",
+    "service": "checkout",
+    "level": "ERROR",
+    "msg": "cart session not found in cache session=a91f"
+   },
+   {
+    "id": "log-02",
+    "ts": "2026-03-12T11:03",
+    "service": "checkout",
+    "level": "ERROR",
+    "msg": "cart session not found in cache session=c20d"
+   },
+   {
+    "id": "log-03",
+    "ts": "2026-03-12T10:55",
+    "service": "redis",
+    "level": "WARN",
+    "msg": "maxmemory reached, evicting keys with allkeys-lru"
+   }
+  ],
+  "metrics": [
+   {
+    "id": "met-01",
+    "service": "checkout",
+    "metric": "error_rate",
+    "region": "us-east",
+    "start": "2026-03-12T10:45",
+    "step_min": 5,
+    "values": [
+     0.001,
+     0.001,
+     0.09,
+     0.12,
+     0.13,
+     0.13
+    ]
+   },
+   {
+    "id": "met-02",
+    "service": "redis",
+    "metric": "memory_utilization",
+    "region": "us-east",
+    "start": "2026-03-12T10:45",
+    "step_min": 5,
+    "values": [
+     0.93,
+     0.97,
+     1.0,
+     1.0,
+     1.0,
+     1.0
+    ]
+   },
+   {
+    "id": "met-03",
+    "service": "redis",
+    "metric": "evicted_keys_per_min",
+    "region": "us-east",
+    "start": "2026-03-12T10:45",
+    "step_min": 5,
+    "values": [
+     0,
+     0,
+     8400,
+     9100,
+     9300,
+     9200
+    ]
+   }
+  ],
+  "deployments": [
+   {
+    "id": "dep-01",
+    "ts": "2026-03-12T11:00",
+    "service": "checkout",
+    "kind": "deploy",
+    "detail": "v5.1.2: update footer copy"
+   }
+  ],
+  "history": [],
+  "faults": []
+ },
+ "events": [
+  {
+   "t": 3.22,
+   "type": "step",
+   "node": "orchestrate",
+   "update": {
+    "tasks": {
+     "r1-obs_logs_metrics": {
+      "id": "r1-obs_logs_metrics",
+      "agent": "observability",
+      "question": "Inspect error logs, exception stack traces, and transaction/cart metrics for checkout and cart services around 2026-03-12 11:00 to 11:20. Look for cart deletion, session reset, or API error spikes.",
+      "depends_on": [],
+      "status": "pending",
+      "attempts": 0,
+      "finding": null
+     },
+     "r1-dep_changes": {
+      "id": "r1-dep_changes",
+      "agent": "dependency",
+      "question": "Check recent deployments, configuration changes, feature flags, and service dependency releases for checkout and cart services around 2026-03-12 11:00 to 11:20.",
+      "depends_on": [],
+      "status": "pending",
+      "attempts": 0,
+      "finding": null
+     }
+    },
+    "round": 1,
+    "evidence_seen": 0,
+    "trace": [
+     "orchestrator: round 1, planned: ['r1-dep_changes', 'r1-obs_logs_metrics']"
+    ],
+    "usage": {
+     "input_tokens": 384,
+     "output_tokens": 317,
+     "thinking_tokens": 153,
+     "llm_calls": 1,
+     "tool_calls": 0
+    }
+   }
+  },
+  {
+   "t": 3.22,
+   "type": "step",
+   "node": "schedule",
+   "update": {
+    "usage": {
+     "input_tokens": 384,
+     "output_tokens": 317,
+     "thinking_tokens": 153,
+     "llm_calls": 1,
+     "tool_calls": 0
+    }
+   }
+  },
+  {
+   "t": 5.24,
+   "type": "tool",
+   "agent": "dependency",
+   "tool": "get_deployments",
+   "args": {
+    "start": "2026-03-12T10:50",
+    "end": "2026-03-12T11:25"
+   },
+   "status": "ok",
+   "rows": [
+    "dep-01"
+   ],
+   "note": "",
+   "seconds": 0.01
+  },
+  {
+   "t": 5.24,
+   "type": "tool",
+   "agent": "dependency",
+   "tool": "get_dependencies",
+   "args": {
+    "service": "checkout"
+   },
+   "status": "ok",
+   "rows": [
+    "top-01",
+    "top-03",
+    "top-04",
+    "top-05",
+    "top-06"
+   ],
+   "note": "",
+   "seconds": 0.01
+  },
+  {
+   "t": 6.21,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_logs",
+   "args": {
+    "level": "ERROR",
+    "start": "2026-03-12T11:00",
+    "end": "2026-03-12T11:20",
+    "service": "cart"
+   },
+   "status": "ok",
+   "rows": [],
+   "note": "no matching rows",
+   "seconds": 0.0
+  },
+  {
+   "t": 6.21,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_metrics",
+   "args": {
+    "service": "cart",
+    "end": "2026-03-12T11:20",
+    "start": "2026-03-12T11:00"
+   },
+   "status": "ok",
+   "rows": [],
+   "note": "no matching rows",
+   "seconds": 0.0
+  },
+  {
+   "t": 6.21,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_logs",
+   "args": {
+    "level": "ERROR",
+    "start": "2026-03-12T11:00",
+    "service": "checkout",
+    "end": "2026-03-12T11:20"
+   },
+   "status": "ok",
+   "rows": [
+    "log-02"
+   ],
+   "note": "",
+   "seconds": 0.0
+  },
+  {
+   "t": 6.21,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_metrics",
+   "args": {
+    "service": "checkout",
+    "end": "2026-03-12T11:20",
+    "start": "2026-03-12T11:00"
+   },
+   "status": "ok",
+   "rows": [
+    "met-01"
+   ],
+   "note": "",
+   "seconds": 0.0
+  },
+  {
+   "t": 7.5,
+   "type": "tool",
+   "agent": "dependency",
+   "tool": "get_deployments",
+   "args": {
+    "end": "2026-03-12T11:20",
+    "start": "2026-03-12T00:00",
+    "service": "cart"
+   },
+   "status": "ok",
+   "rows": [],
+   "note": "no matching rows",
+   "seconds": 0.01
+  },
+  {
+   "t": 7.5,
+   "type": "tool",
+   "agent": "dependency",
+   "tool": "get_dependencies",
+   "args": {
+    "service": "cart"
+   },
+   "status": "ok",
+   "rows": [],
+   "note": "no matching rows",
+   "seconds": 0.01
+  },
+  {
+   "t": 8.53,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_logs",
+   "args": {
+    "start": "2026-03-12T11:00",
+    "end": "2026-03-12T11:20",
+    "service": "checkout"
+   },
+   "status": "ok",
+   "rows": [
+    "log-02"
+   ],
+   "note": "",
+   "seconds": 0.0
+  },
+  {
+   "t": 8.53,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_logs",
+   "args": {
+    "end": "2026-03-12T11:20",
+    "start": "2026-03-12T11:00",
+    "service": "cart"
+   },
+   "status": "ok",
+   "rows": [],
+   "note": "no matching rows",
+   "seconds": 0.0
+  },
+  {
+   "t": 9.45,
+   "type": "tool",
+   "agent": "dependency",
+   "tool": "get_deployments",
+   "args": {
+    "end": "2026-03-12T11:20",
+    "start": "2026-03-12T08:00"
+   },
+   "status": "ok",
+   "rows": [
+    "dep-01"
+   ],
+   "note": "",
+   "seconds": 0.0
+  },
+  {
+   "t": 11.89,
+   "type": "tool",
+   "agent": "dependency",
+   "tool": "search_incidents",
+   "args": {
+    "query": "cart checkout"
+   },
+   "status": "ok",
+   "rows": [],
+   "note": "no matching rows",
+   "seconds": 0.0
+  },
+  {
+   "t": 12.45,
+   "type": "step",
+   "node": "run_task",
+   "update": {
+    "tasks": {
+     "r1-obs_logs_metrics": {
+      "id": "r1-obs_logs_metrics",
+      "agent": "observability",
+      "question": "Inspect error logs, exception stack traces, and transaction/cart metrics for checkout and cart services around 2026-03-12 11:00 to 11:20. Look for cart deletion, session reset, or API error spikes.",
+      "depends_on": [],
+      "status": "done",
+      "attempts": 0,
+      "finding": {
+       "summary": "Investigation of logs and metrics for checkout and cart services from 11:00 to 11:20 revealed error logs in checkout due to missing cart sessions in cache, along with an elevated error rate in us-east. No cart service logs or metrics were recorded in this period.",
+       "claims": [
+        {
+         "text": "At 2026-03-12T11:03, checkout service logged an ERROR: \"cart session not found in cache session=c20d\".",
+         "kind": "fact",
+         "evidence_ids": [
+          "log-02"
+         ]
+        },
+        {
+         "text": "The checkout service error_rate metric in us-east recorded values of 0.12, 0.13, and 0.13 at 5-minute intervals starting at 2026-03-12T11:00.",
+         "kind": "fact",
+         "evidence_ids": [
+          "met-01"
+         ]
+        },
+        {
+         "text": "Checkout error rates coincided with session cache lookup failures during the 11:00 to 11:20 window.",
+         "kind": "inference",
+         "evidence_ids": [
+          "log-02",
+          "met-01"
+         ]
+        }
+       ],
+       "gaps": [
+        "No log lines or metric series were found for the cart service during the 11:00 to 11:20 window."
+       ]
+      }
+     }
+    },
+    "evidence": {
+     "log-02": {
+      "id": "log-02",
+      "source": "logs",
+      "content": "{\"id\": \"log-02\", \"ts\": \"2026-03-12T11:03\", \"service\": \"checkout\", \"level\": \"ERROR\", \"msg\": \"cart session not found in cache session=c20d\"}"
+     },
+     "met-01": {
+      "id": "met-01",
+      "source": "metrics",
+      "content": "{\"id\": \"met-01\", \"service\": \"checkout\", \"metric\": \"error_rate\", \"region\": \"us-east\", \"start\": \"2026-03-12T11:00\", \"step_min\": 5, \"values\": [0.12, 0.13, 0.13]}"
+     }
+    },
+    "gaps": [
+     "No log lines or metric series were found for the cart service during the 11:00 to 11:20 window."
+    ],
+    "failed_tools": [],
+    "grounding": {
+     "citations": 4,
+     "valid_citations": 4,
+     "downgraded_claims": 0
+    },
+    "trace": [
+     "observability: r1-obs_logs_metrics found ['log-02', 'met-01']"
+    ],
+    "usage": {
+     "input_tokens": 10292,
+     "output_tokens": 2145,
+     "thinking_tokens": 1099,
+     "llm_calls": 8,
+     "tool_calls": 12
+    }
+   }
+  },
+  {
+   "t": 15.9,
+   "type": "step",
+   "node": "run_task",
+   "update": {
+    "tasks": {
+     "r1-dep_changes": {
+      "id": "r1-dep_changes",
+      "agent": "dependency",
+      "question": "Check recent deployments, configuration changes, feature flags, and service dependency releases for checkout and cart services around 2026-03-12 11:00 to 11:20.",
+      "depends_on": [],
+      "status": "done",
+      "attempts": 0,
+      "finding": {
+       "summary": "Between 11:00 and 11:20 on 2026-03-12, a single deployment dep-01 was recorded for the checkout service at 11:00 (v5.1.2: update footer copy). No deployments were recorded for the cart service or other related services during this window.",
+       "claims": [
+        {
+         "text": "At 2026-03-12T11:00, service checkout underwent deployment dep-01 (version v5.1.2: update footer copy).",
+         "kind": "fact",
+         "evidence_ids": [
+          "dep-01"
+         ]
+        },
+        {
+         "text": "Checkout service downstream/upstream dependencies include gateway (downstream), payments, inventory, auth, and redis (upstreams).",
+         "kind": "fact",
+         "evidence_ids": [
+          "top-01",
+          "top-03",
+          "top-04",
+          "top-05",
+          "top-06"
+         ]
+        },
+        {
+         "text": "No other deployments or configuration changes were found for checkout, cart, or upstream services between 2026-03-12T08:00 and 2026-03-12T11:20.",
+         "kind": "fact",
+         "evidence_ids": [
+          "dep-01"
+         ]
+        }
+       ],
+       "gaps": [
+        "Feature flags changes could not be directly inspected as no feature flag configuration tool was available.",
+        "No dependency mapping rows were found for the cart service."
+       ]
+      }
+     }
+    },
+    "evidence": {
+     "dep-01": {
+      "id": "dep-01",
+      "source": "deployments",
+      "content": "{\"id\": \"dep-01\", \"ts\": \"2026-03-12T11:00\", \"service\": \"checkout\", \"kind\": \"deploy\", \"detail\": \"v5.1.2: update footer copy\"}"
+     },
+     "top-01": {
+      "id": "top-01",
+      "source": "dependencies",
+      "content": "{\"id\": \"top-01\", \"service\": \"gateway\", \"depends_on\": \"checkout\"}"
+     },
+     "top-03": {
+      "id": "top-03",
+      "source": "dependencies",
+      "content": "{\"id\": \"top-03\", \"service\": \"checkout\", \"depends_on\": \"payments\"}"
+     },
+     "top-04": {
+      "id": "top-04",
+      "source": "dependencies",
+      "content": "{\"id\": \"top-04\", \"service\": \"checkout\", \"depends_on\": \"inventory\"}"
+     },
+     "top-05": {
+      "id": "top-05",
+      "source": "dependencies",
+      "content": "{\"id\": \"top-05\", \"service\": \"checkout\", \"depends_on\": \"auth\"}"
+     },
+     "top-06": {
+      "id": "top-06",
+      "source": "dependencies",
+      "content": "{\"id\": \"top-06\", \"service\": \"checkout\", \"depends_on\": \"redis\"}"
+     }
+    },
+    "gaps": [
+     "Feature flags changes could not be directly inspected as no feature flag configuration tool was available.",
+     "No dependency mapping rows were found for the cart service."
+    ],
+    "failed_tools": [],
+    "grounding": {
+     "citations": 7,
+     "valid_citations": 7,
+     "downgraded_claims": 0
+    },
+    "trace": [
+     "dependency: r1-dep_changes found ['dep-01', 'top-01', 'top-03', 'top-04', 'top-05', 'top-06']"
+    ],
+    "usage": {
+     "input_tokens": 12271,
+     "output_tokens": 2728,
+     "thinking_tokens": 1343,
+     "llm_calls": 9,
+     "tool_calls": 12
+    }
+   }
+  },
+  {
+   "t": 15.9,
+   "type": "step",
+   "node": "schedule",
+   "update": {
+    "usage": {
+     "input_tokens": 12271,
+     "output_tokens": 2728,
+     "thinking_tokens": 1343,
+     "llm_calls": 9,
+     "tool_calls": 12
+    }
+   }
+  },
+  {
+   "t": 18.75,
+   "type": "step",
+   "node": "reason",
+   "update": {
+    "hypotheses": [
+     {
+      "id": "hyp-01",
+      "statement": "Checkout deployment v5.1.2 at 11:00 introduced a bug causing checkout service to fail redis session cache lookups",
+      "category": "bad_deploy",
+      "component": "checkout",
+      "supporting": [
+       "dep-01",
+       "log-02",
+       "met-01"
+      ],
+      "contradicting": [],
+      "assumptions": [
+       "The deployment v5.1.2 introduced a bug causing cache keys to be misformatted or session lookups to fail",
+       "The timing (11:00 deploy vs 11:00 error rate rise) indicates a direct causal relationship"
+      ]
+     },
+     {
+      "id": "hyp-02",
+      "statement": "Redis cache cluster failure or eviction causing lost cart sessions during checkout lookups",
+      "category": "dependency_failure",
+      "component": "redis",
+      "supporting": [
+       "top-06",
+       "log-02"
+      ],
+      "contradicting": [
+       "dep-01"
+      ],
+      "assumptions": [
+       "Redis cache cleared, evicted keys, or crashed around 11:00, leading to missing cart sessions",
+       "Checkout itself is functioning correctly, but underlying Redis session store lost session data"
+      ]
+     }
+    ],
+    "grounding": {
+     "citations": 6,
+     "valid_citations": 6,
+     "downgraded_claims": 0
+    },
+    "trace": [
+     "reasoning: proposed ['hyp-01', 'hyp-02']"
+    ],
+    "usage": {
+     "input_tokens": 13733,
+     "output_tokens": 3001,
+     "thinking_tokens": 1343,
+     "llm_calls": 10,
+     "tool_calls": 12
+    }
+   }
+  },
+  {
+   "t": 21.18,
+   "type": "step",
+   "node": "verify",
+   "update": {
+    "verification": {
+     "verdicts": [
+      {
+       "hypothesis_id": "hyp-01",
+       "rows": [
+        {
+         "evidence_id": "dep-01",
+         "label": "supports",
+         "reason": "Checkout deployment v5.1.2 occurred at 11:00, right when errors started."
+        },
+        {
+         "evidence_id": "log-02",
+         "label": "symptom",
+         "reason": "Shows checkout service failing redis session cache lookups, but does not identify the root cause."
+        },
+        {
+         "evidence_id": "met-01",
+         "label": "symptom",
+         "reason": "Shows increased error rate starting at 11:00 without detailing the specific cause."
+        }
+       ]
+      },
+      {
+       "hypothesis_id": "hyp-02",
+       "rows": [
+        {
+         "evidence_id": "log-02",
+         "label": "symptom",
+         "reason": "Shows missing cart sessions in cache during checkout, but does not confirm Redis cluster failure vs application bug."
+        },
+        {
+         "evidence_id": "met-01",
+         "label": "symptom",
+         "reason": "Shows elevated error rate in checkout starting at 11:00."
+        }
+       ]
+      }
+     ]
+    },
+    "grounding": {
+     "citations": 5,
+     "valid_citations": 5,
+     "downgraded_claims": 0
+    },
+    "trace": [
+     "verifier: labelled evidence"
+    ],
+    "usage": {
+     "input_tokens": 14601,
+     "output_tokens": 3254,
+     "thinking_tokens": 1343,
+     "llm_calls": 11,
+     "tool_calls": 12
+    }
+   }
+  },
+  {
+   "t": 24.95,
+   "type": "step",
+   "node": "criticize",
+   "update": {
+    "critique": {
+     "verdict": "investigate",
+     "objections": [
+      "Checkout deployment v5.1.2 was merely a footer copy update, making it unlikely to be the root cause of session cache lookup failures.",
+      "Redis cache behavior/metrics/logs have not been queried or inspected yet to confirm if Redis evictions, node failure, or connectivity issues caused lost cart sessions."
+     ],
+     "requests": [
+      {
+       "agent": "observability",
+       "question": "Are there any error logs or anomalous metrics (e.g., evictions, memory usage, connection errors) for the redis service between 11:00 and 11:20?",
+       "reason": "To determine if Redis session cache failure or eviction is responsible for the missing cart sessions in checkout."
+      }
+     ]
+    },
+    "stop_reason": "",
+    "trace": [
+     "critic: investigate, 1 requests"
+    ],
+    "usage": {
+     "input_tokens": 15681,
+     "output_tokens": 3720,
+     "thinking_tokens": 1642,
+     "llm_calls": 12,
+     "tool_calls": 12
+    }
+   }
+  },
+  {
+   "t": 26.68,
+   "type": "step",
+   "node": "orchestrate",
+   "update": {
+    "tasks": {
+     "r2-obs-redis-01": {
+      "id": "r2-obs-redis-01",
+      "agent": "observability",
+      "question": "Are there any error logs or anomalous metrics (e.g., evictions, memory usage, connection drops, high latency) for the redis service between 11:00 and 11:20 on 2026-03-12?",
+      "depends_on": [],
+      "status": "pending",
+      "attempts": 0,
+      "finding": null
+     }
+    },
+    "round": 2,
+    "evidence_seen": 8,
+    "trace": [
+     "orchestrator: round 2, planned: ['r2-obs-redis-01']"
+    ],
+    "usage": {
+     "input_tokens": 16285,
+     "output_tokens": 3858,
+     "thinking_tokens": 1685,
+     "llm_calls": 13,
+     "tool_calls": 12
+    }
+   }
+  },
+  {
+   "t": 26.68,
+   "type": "step",
+   "node": "schedule",
+   "update": {
+    "usage": {
+     "input_tokens": 16285,
+     "output_tokens": 3858,
+     "thinking_tokens": 1685,
+     "llm_calls": 13,
+     "tool_calls": 12
+    }
+   }
+  },
+  {
+   "t": 29.0,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_logs",
+   "args": {
+    "end": "2026-03-12T11:20",
+    "service": "redis",
+    "start": "2026-03-12T11:00"
+   },
+   "status": "ok",
+   "rows": [],
+   "note": "no matching rows",
+   "seconds": 0.0
+  },
+  {
+   "t": 29.0,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_metrics",
+   "args": {
+    "end": "2026-03-12T11:20",
+    "start": "2026-03-12T11:00",
+    "service": "redis"
+   },
+   "status": "ok",
+   "rows": [
+    "met-02",
+    "met-03"
+   ],
+   "note": "",
+   "seconds": 0.0
+  },
+  {
+   "t": 31.8,
+   "type": "tool",
+   "agent": "observability",
+   "tool": "query_metrics",
+   "args": {
+    "service": "redis",
+    "end": "2026-03-12T11:00",
+    "start": "2026-03-12T10:40"
+   },
+   "status": "ok",
+   "rows": [
+    "met-02",
+    "met-03"
+   ],
+   "note": "",
+   "seconds": 0.0
+  },
+  {
+   "t": 35.93,
+   "type": "step",
+   "node": "run_task",
+   "update": {
+    "tasks": {
+     "r2-obs-redis-01": {
+      "id": "r2-obs-redis-01",
+      "agent": "observability",
+      "question": "Are there any error logs or anomalous metrics (e.g., evictions, memory usage, connection drops, high latency) for the redis service between 11:00 and 11:20 on 2026-03-12?",
+      "depends_on": [],
+      "status": "done",
+      "attempts": 0,
+      "finding": {
+       "summary": "Between 11:00 and 11:20 on 2026-03-12, the redis service in us-east showed 100% memory utilization and high key eviction rates (9,100\u20139,300 evictions/min), up from 0 evictions prior to 10:55. No redis log entries were found during this window.",
+       "claims": [
+        {
+         "text": "No log entries were found for the redis service between 11:00 and 11:20 on 2026-03-12.",
+         "kind": "assumption",
+         "evidence_ids": []
+        },
+        {
+         "text": "The redis service in us-east reached 100% memory utilization (1.0) starting at 10:55 and remained at 1.0 from 11:00 to 11:10 on 2026-03-12.",
+         "kind": "fact",
+         "evidence_ids": [
+          "met-02"
+         ]
+        },
+        {
+         "text": "The evicted_keys_per_min metric for redis in us-east was 0 until 10:50, then spiked to 8,400 at 10:55 and stayed elevated between 9,100 and 9,300 evictions per minute from 11:00 to 11:10.",
+         "kind": "fact",
+         "evidence_ids": [
+          "met-03"
+         ]
+        },
+        {
+         "text": "The redis cache in us-east experienced severe memory pressure resulting in high rates of key evictions between 11:00 and 11:20 on 2026-03-12.",
+         "kind": "inference",
+         "evidence_ids": [
+          "met-02",
+          "met-03"
+         ]
+        }
+       ],
+       "gaps": []
+      }
+     }
+    },
+    "evidence": {
+     "met-02": {
+      "id": "met-02",
+      "source": "metrics",
+      "content": "{\"id\": \"met-02\", \"service\": \"redis\", \"metric\": \"memory_utilization\", \"region\": \"us-east\", \"start\": \"2026-03-12T10:45\", \"step_min\": 5, \"values\": [0.93, 0.97, 1.0, 1.0]}"
+     },
+     "met-03": {
+      "id": "met-03",
+      "source": "metrics",
+      "content": "{\"id\": \"met-03\", \"service\": \"redis\", \"metric\": \"evicted_keys_per_min\", \"region\": \"us-east\", \"start\": \"2026-03-12T10:45\", \"step_min\": 5, \"values\": [0, 0, 8400, 9100]}"
+     }
+    },
+    "gaps": [],
+    "failed_tools": [],
+    "grounding": {
+     "citations": 4,
+     "valid_citations": 4,
+     "downgraded_claims": 1
+    },
+    "trace": [
+     "observability: r2-obs-redis-01 found ['met-02', 'met-03']"
+    ],
+    "usage": {
+     "input_tokens": 21172,
+     "output_tokens": 5066,
+     "thinking_tokens": 2299,
+     "llm_calls": 16,
+     "tool_calls": 15
+    }
+   }
+  },
+  {
+   "t": 35.93,
+   "type": "step",
+   "node": "schedule",
+   "update": {
+    "usage": {
+     "input_tokens": 21172,
+     "output_tokens": 5066,
+     "thinking_tokens": 2299,
+     "llm_calls": 16,
+     "tool_calls": 15
+    }
+   }
+  },
+  {
+   "t": 42.51,
+   "type": "step",
+   "node": "reason",
+   "update": {
+    "hypotheses": [
+     {
+      "id": "hypo-01",
+      "statement": "Redis cache memory exhaustion in us-east caused high key eviction rates starting at 10:55, purging active cart session data and causing checkouts to fail with missing sessions.",
+      "category": "resource_exhaustion",
+      "component": "redis",
+      "supporting": [
+       "met-02",
+       "met-03",
+       "log-02"
+      ],
+      "contradicting": [],
+      "assumptions": [
+       "Cart session data was stored in the shared Redis cache without eviction protection or persistence, causing cart keys to be evicted when Redis hit 100% memory utilization."
+      ]
+     },
+     {
+      "id": "hypo-02",
+      "statement": "Checkout deployment dep-01 (v5.1.2) at 11:00 caused cart sessions to be dropped or misread by the checkout service.",
+      "category": "bad_deploy",
+      "component": "checkout",
+      "supporting": [
+       "dep-01",
+       "met-01",
+       "log-02"
+      ],
+      "contradicting": [
+       "met-02",
+       "met-03"
+      ],
+      "assumptions": [
+       "The v5.1.2 deploy introduced an undocumented regression or side effect that affected cache reads or cleared cart sessions upon deployment."
+      ]
+     },
+     {
+      "id": "hypo-03",
+      "statement": "A traffic surge or sudden increase in session creation led to Redis memory saturation and key evictions.",
+      "category": "traffic_surge",
+      "component": "redis",
+      "supporting": [
+       "met-02",
+       "met-03"
+      ],
+      "contradicting": [
+       "dep-01"
+      ],
+      "assumptions": [
+       "An unexpected increase in cart creations or session volume filled Redis memory to capacity prior to 10:55."
+      ]
+     }
+    ],
+    "grounding": {
+     "citations": 11,
+     "valid_citations": 11,
+     "downgraded_claims": 0
+    },
+    "trace": [
+     "reasoning: proposed ['hypo-01', 'hypo-02', 'hypo-03']"
+    ],
+    "usage": {
+     "input_tokens": 23283,
+     "output_tokens": 6182,
+     "thinking_tokens": 3021,
+     "llm_calls": 17,
+     "tool_calls": 15
+    }
+   }
+  },
+  {
+   "t": 46.53,
+   "type": "step",
+   "node": "verify",
+   "update": {
+    "verification": {
+     "verdicts": [
+      {
+       "hypothesis_id": "hypo-01",
+       "rows": [
+        {
+         "evidence_id": "met-02",
+         "label": "supports",
+         "reason": "Redis memory utilization reached 100% (1.0) starting at 10:55, showing memory exhaustion in us-east."
+        },
+        {
+         "evidence_id": "met-03",
+         "label": "supports",
+         "reason": "Evicted keys spiked dramatically to 8,400/min starting at 10:55 when memory filled up."
+        },
+        {
+         "evidence_id": "log-02",
+         "label": "symptom",
+         "reason": "Shows checkout service failing due to missing cart session in cache."
+        },
+        {
+         "evidence_id": "met-01",
+         "label": "symptom",
+         "reason": "Shows increased error rate in checkout starting at 11:00."
+        }
+       ]
+      },
+      {
+       "hypothesis_id": "hypo-02",
+       "rows": [
+        {
+         "evidence_id": "dep-01",
+         "label": "contradicts",
+         "reason": "Deployment dep-01 at 11:00 only changed footer copy and occurred after Redis memory reached max capacity at 10:55."
+        },
+        {
+         "evidence_id": "log-02",
+         "label": "symptom",
+         "reason": "Shows cart session missing error in checkout service."
+        },
+        {
+         "evidence_id": "met-01",
+         "label": "symptom",
+         "reason": "Shows checkout error rate elevation starting at 11:00."
+        }
+       ]
+      },
+      {
+       "hypothesis_id": "hypo-03",
+       "rows": [
+        {
+         "evidence_id": "met-02",
+         "label": "supports",
+         "reason": "Shows Redis memory reaching 100% utilization at 10:55."
+        },
+        {
+         "evidence_id": "met-03",
+         "label": "supports",
+         "reason": "Shows sudden surge of key evictions starting at 10:55."
+        },
+        {
+         "evidence_id": "log-02",
+         "label": "symptom",
+         "reason": "Generic symptom log of missing cart session in cache."
+        },
+        {
+         "evidence_id": "met-01",
+         "label": "symptom",
+         "reason": "Elevated checkout error rate following the Redis saturation."
+        }
+       ]
+      }
+     ]
+    },
+    "grounding": {
+     "citations": 11,
+     "valid_citations": 11,
+     "downgraded_claims": 0
+    },
+    "trace": [
+     "verifier: labelled evidence"
+    ],
+    "usage": {
+     "input_tokens": 24395,
+     "output_tokens": 6691,
+     "thinking_tokens": 3021,
+     "llm_calls": 18,
+     "tool_calls": 15
+    }
+   }
+  },
+  {
+   "t": 47.91,
+   "type": "step",
+   "node": "criticize",
+   "update": {
+    "critique": {
+     "verdict": "accept",
+     "objections": [],
+     "requests": []
+    },
+    "stop_reason": "critic_accepted",
+    "trace": [
+     "critic: accept, 0 requests"
+    ],
+    "usage": {
+     "input_tokens": 25768,
+     "output_tokens": 6714,
+     "thinking_tokens": 3021,
+     "llm_calls": 19,
+     "tool_calls": 15
+    }
+   }
+  },
+  {
+   "t": 49.77,
+   "type": "step",
+   "node": "finalize",
+   "update": {
+    "report": {
+     "incident_id": "INC-03",
+     "outcome": "inconclusive",
+     "stop_reason": "critic_accepted",
+     "summary": "The investigation into carts emptying during checkout is inconclusive. The hypotheses evaluated (Redis session key evictions due to memory saturation/exhaustion vs checkout deployment v5.1.2 dropping/misreading session data) all have low confidence with no clear leading cause. Missing evidence includes cart service logs/metrics during the 11:00-11:20 window, feature flag configuration history, and cart service dependency mappings.",
+     "hypotheses": [
+      {
+       "id": "hypo-03",
+       "statement": "A traffic surge or sudden increase in session creation led to Redis memory saturation and key evictions.",
+       "category": "traffic_surge",
+       "component": "redis",
+       "supporting": [
+        "met-02",
+        "met-03"
+       ],
+       "contradicting": [
+        "dep-01"
+       ],
+       "assumptions": [
+        "An unexpected increase in cart creations or session volume filled Redis memory to capacity prior to 10:55."
+       ],
+       "verified_supporting": [
+        "met-02",
+        "met-03"
+       ],
+       "verified_contradicting": [],
+       "verified_ratio": 1.0,
+       "net_support": 2,
+       "confidence": "low",
+       "row_labels": {
+        "met-02": "supports",
+        "met-03": "supports",
+        "log-02": "symptom",
+        "met-01": "symptom"
+       }
+      },
+      {
+       "id": "hypo-01",
+       "statement": "Redis cache memory exhaustion in us-east caused high key eviction rates starting at 10:55, purging active cart session data and causing checkouts to fail with missing sessions.",
+       "category": "resource_exhaustion",
+       "component": "redis",
+       "supporting": [
+        "met-02",
+        "met-03",
+        "log-02"
+       ],
+       "contradicting": [],
+       "assumptions": [
+        "Cart session data was stored in the shared Redis cache without eviction protection or persistence, causing cart keys to be evicted when Redis hit 100% memory utilization."
+       ],
+       "verified_supporting": [
+        "met-02",
+        "met-03"
+       ],
+       "verified_contradicting": [],
+       "verified_ratio": 0.6666666666666666,
+       "net_support": 2,
+       "confidence": "low",
+       "row_labels": {
+        "met-02": "supports",
+        "met-03": "supports",
+        "log-02": "symptom",
+        "met-01": "symptom"
+       }
+      },
+      {
+       "id": "hypo-02",
+       "statement": "Checkout deployment dep-01 (v5.1.2) at 11:00 caused cart sessions to be dropped or misread by the checkout service.",
+       "category": "bad_deploy",
+       "component": "checkout",
+       "supporting": [
+        "dep-01",
+        "met-01",
+        "log-02"
+       ],
+       "contradicting": [
+        "met-02",
+        "met-03"
+       ],
+       "assumptions": [
+        "The v5.1.2 deploy introduced an undocumented regression or side effect that affected cache reads or cleared cart sessions upon deployment."
+       ],
+       "verified_supporting": [],
+       "verified_contradicting": [
+        "dep-01"
+       ],
+       "verified_ratio": 0.0,
+       "net_support": -1,
+       "confidence": "low",
+       "row_labels": {
+        "dep-01": "contradicts",
+        "log-02": "symptom",
+        "met-01": "symptom"
+       }
+      }
+     ],
+     "facts": [
+      {
+       "text": "At 2026-03-12T11:03, checkout service logged an ERROR: \"cart session not found in cache session=c20d\".",
+       "kind": "fact",
+       "evidence_ids": [
+        "log-02"
+       ]
+      },
+      {
+       "text": "The checkout service error_rate metric in us-east recorded values of 0.12, 0.13, and 0.13 at 5-minute intervals starting at 2026-03-12T11:00.",
+       "kind": "fact",
+       "evidence_ids": [
+        "met-01"
+       ]
+      },
+      {
+       "text": "At 2026-03-12T11:00, service checkout underwent deployment dep-01 (version v5.1.2: update footer copy).",
+       "kind": "fact",
+       "evidence_ids": [
+        "dep-01"
+       ]
+      },
+      {
+       "text": "Checkout service downstream/upstream dependencies include gateway (downstream), payments, inventory, auth, and redis (upstreams).",
+       "kind": "fact",
+       "evidence_ids": [
+        "top-01",
+        "top-03",
+        "top-04",
+        "top-05",
+        "top-06"
+       ]
+      },
+      {
+       "text": "No other deployments or configuration changes were found for checkout, cart, or upstream services between 2026-03-12T08:00 and 2026-03-12T11:20.",
+       "kind": "fact",
+       "evidence_ids": [
+        "dep-01"
+       ]
+      },
+      {
+       "text": "The redis service in us-east reached 100% memory utilization (1.0) starting at 10:55 and remained at 1.0 from 11:00 to 11:10 on 2026-03-12.",
+       "kind": "fact",
+       "evidence_ids": [
+        "met-02"
+       ]
+      },
+      {
+       "text": "The evicted_keys_per_min metric for redis in us-east was 0 until 10:50, then spiked to 8,400 at 10:55 and stayed elevated between 9,100 and 9,300 evictions per minute from 11:00 to 11:10.",
+       "kind": "fact",
+       "evidence_ids": [
+        "met-03"
+       ]
+      }
+     ],
+     "assumptions": [
+      {
+       "text": "No log entries were found for the redis service between 11:00 and 11:20 on 2026-03-12.",
+       "kind": "assumption",
+       "evidence_ids": []
+      },
+      {
+       "text": "An unexpected increase in cart creations or session volume filled Redis memory to capacity prior to 10:55.",
+       "kind": "assumption",
+       "evidence_ids": []
+      },
+      {
+       "text": "Cart session data was stored in the shared Redis cache without eviction protection or persistence, causing cart keys to be evicted when Redis hit 100% memory utilization.",
+       "kind": "assumption",
+       "evidence_ids": []
+      },
+      {
+       "text": "The v5.1.2 deploy introduced an undocumented regression or side effect that affected cache reads or cleared cart sessions upon deployment.",
+       "kind": "assumption",
+       "evidence_ids": []
+      }
+     ],
+     "gaps": [
+      "No log lines or metric series were found for the cart service during the 11:00 to 11:20 window.",
+      "Feature flags changes could not be directly inspected as no feature flag configuration tool was available.",
+      "No dependency mapping rows were found for the cart service."
+     ],
+     "actions": [
+      {
+       "description": "Gather logs and metric series for the cart service during the 11:00 to 11:20 window to check for cart drop errors.",
+       "risk": "low",
+       "hypothesis_id": "",
+       "requires_human_approval": true
+      },
+      {
+       "description": "Inspect Redis memory usage and eviction rate metrics across us-east to verify key eviction behavior.",
+       "risk": "low",
+       "hypothesis_id": "",
+       "requires_human_approval": true
+      },
+      {
+       "description": "Check feature flag configuration changes and deployment logs for checkout release v5.1.2.",
+       "risk": "low",
+       "hypothesis_id": "",
+       "requires_human_approval": true
+      }
+     ],
+     "usage": {
+      "input_tokens": 26386,
+      "output_tokens": 6940,
+      "thinking_tokens": 3021,
+      "llm_calls": 20,
+      "tool_calls": 15
+     },
+     "usage_by_agent": {
+      "orchestrator": {
+       "input_tokens": 988,
+       "output_tokens": 455,
+       "thinking_tokens": 196,
+       "llm_calls": 2,
+       "tool_calls": 0
+      },
+      "dependency": {
+       "input_tokens": 7270,
+       "output_tokens": 1258,
+       "thinking_tokens": 704,
+       "llm_calls": 5,
+       "tool_calls": 0
+      },
+      "observability": {
+       "input_tokens": 9504,
+       "output_tokens": 2361,
+       "thinking_tokens": 1100,
+       "llm_calls": 6,
+       "tool_calls": 0
+      },
+      "reasoning": {
+       "input_tokens": 3573,
+       "output_tokens": 1389,
+       "thinking_tokens": 722,
+       "llm_calls": 2,
+       "tool_calls": 0
+      },
+      "verifier": {
+       "input_tokens": 1980,
+       "output_tokens": 762,
+       "thinking_tokens": 0,
+       "llm_calls": 2,
+       "tool_calls": 0
+      },
+      "critic": {
+       "input_tokens": 2453,
+       "output_tokens": 489,
+       "thinking_tokens": 299,
+       "llm_calls": 2,
+       "tool_calls": 0
+      },
+      "reporting": {
+       "input_tokens": 618,
+       "output_tokens": 226,
+       "thinking_tokens": 0,
+       "llm_calls": 1,
+       "tool_calls": 0
+      }
+     },
+     "grounding": {
+      "citations": 48,
+      "valid_citations": 48,
+      "downgraded_claims": 1
+     },
+     "incident": {
+      "id": "INC-03",
+      "title": "Carts emptying during checkout",
+      "description": "Customers lose their carts mid checkout. A checkout deploy went out around the same time.",
+      "service": "checkout",
+      "reported_at": "2026-03-12T11:15"
+     },
+     "evidence": [
+      {
+       "id": "log-02",
+       "source": "logs",
+       "content": "{\"id\": \"log-02\", \"ts\": \"2026-03-12T11:03\", \"service\": \"checkout\", \"level\": \"ERROR\", \"msg\": \"cart session not found in cache session=c20d\"}"
+      },
+      {
+       "id": "met-01",
+       "source": "metrics",
+       "content": "{\"id\": \"met-01\", \"service\": \"checkout\", \"metric\": \"error_rate\", \"region\": \"us-east\", \"start\": \"2026-03-12T11:00\", \"step_min\": 5, \"values\": [0.12, 0.13, 0.13]}"
+      },
+      {
+       "id": "dep-01",
+       "source": "deployments",
+       "content": "{\"id\": \"dep-01\", \"ts\": \"2026-03-12T11:00\", \"service\": \"checkout\", \"kind\": \"deploy\", \"detail\": \"v5.1.2: update footer copy\"}"
+      },
+      {
+       "id": "top-01",
+       "source": "dependencies",
+       "content": "{\"id\": \"top-01\", \"service\": \"gateway\", \"depends_on\": \"checkout\"}"
+      },
+      {
+       "id": "top-03",
+       "source": "dependencies",
+       "content": "{\"id\": \"top-03\", \"service\": \"checkout\", \"depends_on\": \"payments\"}"
+      },
+      {
+       "id": "top-04",
+       "source": "dependencies",
+       "content": "{\"id\": \"top-04\", \"service\": \"checkout\", \"depends_on\": \"inventory\"}"
+      },
+      {
+       "id": "top-05",
+       "source": "dependencies",
+       "content": "{\"id\": \"top-05\", \"service\": \"checkout\", \"depends_on\": \"auth\"}"
+      },
+      {
+       "id": "top-06",
+       "source": "dependencies",
+       "content": "{\"id\": \"top-06\", \"service\": \"checkout\", \"depends_on\": \"redis\"}"
+      },
+      {
+       "id": "met-02",
+       "source": "metrics",
+       "content": "{\"id\": \"met-02\", \"service\": \"redis\", \"metric\": \"memory_utilization\", \"region\": \"us-east\", \"start\": \"2026-03-12T10:45\", \"step_min\": 5, \"values\": [0.93, 0.97, 1.0, 1.0]}"
+      },
+      {
+       "id": "met-03",
+       "source": "metrics",
+       "content": "{\"id\": \"met-03\", \"service\": \"redis\", \"metric\": \"evicted_keys_per_min\", \"region\": \"us-east\", \"start\": \"2026-03-12T10:45\", \"step_min\": 5, \"values\": [0, 0, 8400, 9100]}"
+      }
+     ],
+     "outcome_reasons": [
+      "the top hypothesis has low confidence",
+      "no clear lead over the alternative 'hypo-01'"
+     ],
+     "inferences": [
+      {
+       "text": "Checkout error rates coincided with session cache lookup failures during the 11:00 to 11:20 window.",
+       "kind": "inference",
+       "evidence_ids": [
+        "log-02",
+        "met-01"
+       ]
+      },
+      {
+       "text": "The redis cache in us-east experienced severe memory pressure resulting in high rates of key evictions between 11:00 and 11:20 on 2026-03-12.",
+       "kind": "inference",
+       "evidence_ids": [
+        "met-02",
+        "met-03"
+       ]
+      }
+     ]
+    },
+    "usage": {
+     "input_tokens": 26386,
+     "output_tokens": 6940,
+     "thinking_tokens": 3021,
+     "llm_calls": 20,
+     "tool_calls": 15
+    },
+    "trace": [
+     "reporting: inconclusive"
+    ]
+   }
+  }
+ ],
+ "report": {
+  "incident_id": "INC-03",
+  "outcome": "inconclusive",
+  "stop_reason": "critic_accepted",
+  "summary": "The investigation into carts emptying during checkout is inconclusive. The hypotheses evaluated (Redis session key evictions due to memory saturation/exhaustion vs checkout deployment v5.1.2 dropping/misreading session data) all have low confidence with no clear leading cause. Missing evidence includes cart service logs/metrics during the 11:00-11:20 window, feature flag configuration history, and cart service dependency mappings.",
+  "hypotheses": [
+   {
+    "id": "hypo-03",
+    "statement": "A traffic surge or sudden increase in session creation led to Redis memory saturation and key evictions.",
+    "category": "traffic_surge",
+    "component": "redis",
+    "supporting": [
+     "met-02",
+     "met-03"
+    ],
+    "contradicting": [
+     "dep-01"
+    ],
+    "assumptions": [
+     "An unexpected increase in cart creations or session volume filled Redis memory to capacity prior to 10:55."
+    ],
+    "verified_supporting": [
+     "met-02",
+     "met-03"
+    ],
+    "verified_contradicting": [],
+    "verified_ratio": 1.0,
+    "net_support": 2,
+    "confidence": "low",
+    "row_labels": {
+     "met-02": "supports",
+     "met-03": "supports",
+     "log-02": "symptom",
+     "met-01": "symptom"
+    }
+   },
+   {
+    "id": "hypo-01",
+    "statement": "Redis cache memory exhaustion in us-east caused high key eviction rates starting at 10:55, purging active cart session data and causing checkouts to fail with missing sessions.",
+    "category": "resource_exhaustion",
+    "component": "redis",
+    "supporting": [
+     "met-02",
+     "met-03",
+     "log-02"
+    ],
+    "contradicting": [],
+    "assumptions": [
+     "Cart session data was stored in the shared Redis cache without eviction protection or persistence, causing cart keys to be evicted when Redis hit 100% memory utilization."
+    ],
+    "verified_supporting": [
+     "met-02",
+     "met-03"
+    ],
+    "verified_contradicting": [],
+    "verified_ratio": 0.6666666666666666,
+    "net_support": 2,
+    "confidence": "low",
+    "row_labels": {
+     "met-02": "supports",
+     "met-03": "supports",
+     "log-02": "symptom",
+     "met-01": "symptom"
+    }
+   },
+   {
+    "id": "hypo-02",
+    "statement": "Checkout deployment dep-01 (v5.1.2) at 11:00 caused cart sessions to be dropped or misread by the checkout service.",
+    "category": "bad_deploy",
+    "component": "checkout",
+    "supporting": [
+     "dep-01",
+     "met-01",
+     "log-02"
+    ],
+    "contradicting": [
+     "met-02",
+     "met-03"
+    ],
+    "assumptions": [
+     "The v5.1.2 deploy introduced an undocumented regression or side effect that affected cache reads or cleared cart sessions upon deployment."
+    ],
+    "verified_supporting": [],
+    "verified_contradicting": [
+     "dep-01"
+    ],
+    "verified_ratio": 0.0,
+    "net_support": -1,
+    "confidence": "low",
+    "row_labels": {
+     "dep-01": "contradicts",
+     "log-02": "symptom",
+     "met-01": "symptom"
+    }
+   }
+  ],
+  "facts": [
+   {
+    "text": "At 2026-03-12T11:03, checkout service logged an ERROR: \"cart session not found in cache session=c20d\".",
+    "kind": "fact",
+    "evidence_ids": [
+     "log-02"
+    ]
+   },
+   {
+    "text": "The checkout service error_rate metric in us-east recorded values of 0.12, 0.13, and 0.13 at 5-minute intervals starting at 2026-03-12T11:00.",
+    "kind": "fact",
+    "evidence_ids": [
+     "met-01"
+    ]
+   },
+   {
+    "text": "At 2026-03-12T11:00, service checkout underwent deployment dep-01 (version v5.1.2: update footer copy).",
+    "kind": "fact",
+    "evidence_ids": [
+     "dep-01"
+    ]
+   },
+   {
+    "text": "Checkout service downstream/upstream dependencies include gateway (downstream), payments, inventory, auth, and redis (upstreams).",
+    "kind": "fact",
+    "evidence_ids": [
+     "top-01",
+     "top-03",
+     "top-04",
+     "top-05",
+     "top-06"
+    ]
+   },
+   {
+    "text": "No other deployments or configuration changes were found for checkout, cart, or upstream services between 2026-03-12T08:00 and 2026-03-12T11:20.",
+    "kind": "fact",
+    "evidence_ids": [
+     "dep-01"
+    ]
+   },
+   {
+    "text": "The redis service in us-east reached 100% memory utilization (1.0) starting at 10:55 and remained at 1.0 from 11:00 to 11:10 on 2026-03-12.",
+    "kind": "fact",
+    "evidence_ids": [
+     "met-02"
+    ]
+   },
+   {
+    "text": "The evicted_keys_per_min metric for redis in us-east was 0 until 10:50, then spiked to 8,400 at 10:55 and stayed elevated between 9,100 and 9,300 evictions per minute from 11:00 to 11:10.",
+    "kind": "fact",
+    "evidence_ids": [
+     "met-03"
+    ]
+   }
+  ],
+  "assumptions": [
+   {
+    "text": "No log entries were found for the redis service between 11:00 and 11:20 on 2026-03-12.",
+    "kind": "assumption",
+    "evidence_ids": []
+   },
+   {
+    "text": "An unexpected increase in cart creations or session volume filled Redis memory to capacity prior to 10:55.",
+    "kind": "assumption",
+    "evidence_ids": []
+   },
+   {
+    "text": "Cart session data was stored in the shared Redis cache without eviction protection or persistence, causing cart keys to be evicted when Redis hit 100% memory utilization.",
+    "kind": "assumption",
+    "evidence_ids": []
+   },
+   {
+    "text": "The v5.1.2 deploy introduced an undocumented regression or side effect that affected cache reads or cleared cart sessions upon deployment.",
+    "kind": "assumption",
+    "evidence_ids": []
+   }
+  ],
+  "gaps": [
+   "No log lines or metric series were found for the cart service during the 11:00 to 11:20 window.",
+   "Feature flags changes could not be directly inspected as no feature flag configuration tool was available.",
+   "No dependency mapping rows were found for the cart service."
+  ],
+  "actions": [
+   {
+    "description": "Gather logs and metric series for the cart service during the 11:00 to 11:20 window to check for cart drop errors.",
+    "risk": "low",
+    "hypothesis_id": "",
+    "requires_human_approval": true
+   },
+   {
+    "description": "Inspect Redis memory usage and eviction rate metrics across us-east to verify key eviction behavior.",
+    "risk": "low",
+    "hypothesis_id": "",
+    "requires_human_approval": true
+   },
+   {
+    "description": "Check feature flag configuration changes and deployment logs for checkout release v5.1.2.",
+    "risk": "low",
+    "hypothesis_id": "",
+    "requires_human_approval": true
+   }
+  ],
+  "usage": {
+   "input_tokens": 26386,
+   "output_tokens": 6940,
+   "thinking_tokens": 3021,
+   "llm_calls": 20,
+   "tool_calls": 15
+  },
+  "usage_by_agent": {
+   "orchestrator": {
+    "input_tokens": 988,
+    "output_tokens": 455,
+    "thinking_tokens": 196,
+    "llm_calls": 2,
+    "tool_calls": 0
+   },
+   "dependency": {
+    "input_tokens": 7270,
+    "output_tokens": 1258,
+    "thinking_tokens": 704,
+    "llm_calls": 5,
+    "tool_calls": 0
+   },
+   "observability": {
+    "input_tokens": 9504,
+    "output_tokens": 2361,
+    "thinking_tokens": 1100,
+    "llm_calls": 6,
+    "tool_calls": 0
+   },
+   "reasoning": {
+    "input_tokens": 3573,
+    "output_tokens": 1389,
+    "thinking_tokens": 722,
+    "llm_calls": 2,
+    "tool_calls": 0
+   },
+   "verifier": {
+    "input_tokens": 1980,
+    "output_tokens": 762,
+    "thinking_tokens": 0,
+    "llm_calls": 2,
+    "tool_calls": 0
+   },
+   "critic": {
+    "input_tokens": 2453,
+    "output_tokens": 489,
+    "thinking_tokens": 299,
+    "llm_calls": 2,
+    "tool_calls": 0
+   },
+   "reporting": {
+    "input_tokens": 618,
+    "output_tokens": 226,
+    "thinking_tokens": 0,
+    "llm_calls": 1,
+    "tool_calls": 0
+   }
+  },
+  "grounding": {
+   "citations": 48,
+   "valid_citations": 48,
+   "downgraded_claims": 1
+  },
+  "incident": {
+   "id": "INC-03",
+   "title": "Carts emptying during checkout",
+   "description": "Customers lose their carts mid checkout. A checkout deploy went out around the same time.",
+   "service": "checkout",
+   "reported_at": "2026-03-12T11:15"
+  },
+  "evidence": [
+   {
+    "id": "log-02",
+    "source": "logs",
+    "content": "{\"id\": \"log-02\", \"ts\": \"2026-03-12T11:03\", \"service\": \"checkout\", \"level\": \"ERROR\", \"msg\": \"cart session not found in cache session=c20d\"}"
+   },
+   {
+    "id": "met-01",
+    "source": "metrics",
+    "content": "{\"id\": \"met-01\", \"service\": \"checkout\", \"metric\": \"error_rate\", \"region\": \"us-east\", \"start\": \"2026-03-12T11:00\", \"step_min\": 5, \"values\": [0.12, 0.13, 0.13]}"
+   },
+   {
+    "id": "dep-01",
+    "source": "deployments",
+    "content": "{\"id\": \"dep-01\", \"ts\": \"2026-03-12T11:00\", \"service\": \"checkout\", \"kind\": \"deploy\", \"detail\": \"v5.1.2: update footer copy\"}"
+   },
+   {
+    "id": "top-01",
+    "source": "dependencies",
+    "content": "{\"id\": \"top-01\", \"service\": \"gateway\", \"depends_on\": \"checkout\"}"
+   },
+   {
+    "id": "top-03",
+    "source": "dependencies",
+    "content": "{\"id\": \"top-03\", \"service\": \"checkout\", \"depends_on\": \"payments\"}"
+   },
+   {
+    "id": "top-04",
+    "source": "dependencies",
+    "content": "{\"id\": \"top-04\", \"service\": \"checkout\", \"depends_on\": \"inventory\"}"
+   },
+   {
+    "id": "top-05",
+    "source": "dependencies",
+    "content": "{\"id\": \"top-05\", \"service\": \"checkout\", \"depends_on\": \"auth\"}"
+   },
+   {
+    "id": "top-06",
+    "source": "dependencies",
+    "content": "{\"id\": \"top-06\", \"service\": \"checkout\", \"depends_on\": \"redis\"}"
+   },
+   {
+    "id": "met-02",
+    "source": "metrics",
+    "content": "{\"id\": \"met-02\", \"service\": \"redis\", \"metric\": \"memory_utilization\", \"region\": \"us-east\", \"start\": \"2026-03-12T10:45\", \"step_min\": 5, \"values\": [0.93, 0.97, 1.0, 1.0]}"
+   },
+   {
+    "id": "met-03",
+    "source": "metrics",
+    "content": "{\"id\": \"met-03\", \"service\": \"redis\", \"metric\": \"evicted_keys_per_min\", \"region\": \"us-east\", \"start\": \"2026-03-12T10:45\", \"step_min\": 5, \"values\": [0, 0, 8400, 9100]}"
+   }
+  ],
+  "outcome_reasons": [
+   "the top hypothesis has low confidence",
+   "no clear lead over the alternative 'hypo-01'"
+  ],
+  "inferences": [
+   {
+    "text": "Checkout error rates coincided with session cache lookup failures during the 11:00 to 11:20 window.",
+    "kind": "inference",
+    "evidence_ids": [
+     "log-02",
+     "met-01"
+    ]
+   },
+   {
+    "text": "The redis cache in us-east experienced severe memory pressure resulting in high rates of key evictions between 11:00 and 11:20 on 2026-03-12.",
+    "kind": "inference",
+    "evidence_ids": [
+     "met-02",
+     "met-03"
+    ]
+   }
+  ]
+ },
+ "seconds": 49.8
+}
