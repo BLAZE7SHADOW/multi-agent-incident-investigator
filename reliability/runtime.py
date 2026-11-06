@@ -22,6 +22,8 @@ async def run_incident(
     db_path: str | Path = ":memory:",
     thread_id: str | None = None,
     resume: bool = False,
+    on_step=None,
+    callbacks=(),
 ) -> Report:
     budget = RunBudget(limits)
     agents = LLMAgents(
@@ -38,6 +40,8 @@ async def run_incident(
         thread_id=thread_id,
         action_policy=flag_risky_actions,
         resume=resume,
+        on_step=on_step,
+        callbacks=callbacks,
     )
 
 
