@@ -1,0 +1,51 @@
+1
+00:00:01,255 --> 00:00:06,281
+An incident report arrives. Seven agents investigate logs, metrics, deployments, dependencies and past incidents.
+
+2
+00:00:06,281 --> 00:00:11,284
+The Orchestrator plans tasks. Specialist agents gather evidence in parallel with real tool calls.
+
+3
+00:00:11,284 --> 00:00:16,286
+Reasoning proposes competing causes. The Verifier labels each row without seeing the citations.
+
+4
+00:00:16,286 --> 00:00:20,331
+The Critic challenges the top answer. Code, not the LLM, decides confidence and the outcome.
+
+5
+00:00:20,331 --> 00:00:24,369
+INC-01 ends conclusive: a bad deploy in payments, matching the correct answer.
+
+6
+00:00:24,369 --> 00:00:27,455
+INC-08: the deployment tool is down and logs are partial.
+
+7
+00:00:27,455 --> 00:00:32,526
+Tool failures are retried, then recorded as evidence gaps instead of guesses.
+
+8
+00:00:32,526 --> 00:00:37,605
+After a second round, the evidence is still not enough, so it honestly reports inconclusive.
+
+9
+00:00:37,605 --> 00:00:42,619
+Both systems share the model, tools and rules. On 12 assignment incidents, the single agent won: 89% vs 69%.
+
+10
+00:00:42,619 --> 00:00:47,724
+On 24 blind incidents, v2 tied on accuracy, 75% vs 71%, with fewer wrong conclusions: 2 vs 5.
+
+11
+00:00:47,724 --> 00:00:51,792
+36 test incidents, with misleading evidence, conflicting signals and tool failures.
+
+12
+00:00:51,792 --> 00:00:55,846
+Offline checks test the tools and evidence rules with no model calls.
+
+13
+00:00:55,846 --> 00:00:59,847
+Every assignment requirement, mapped to where you can see it.

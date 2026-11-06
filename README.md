@@ -4,6 +4,8 @@ An AI system that investigates production incidents. It reads logs, metrics, dep
 
 All data is simulated, and some of it is incomplete or misleading on purpose.
 
+**Demo video:** [`docs/demo/demo.mp4`](docs/demo/demo.mp4), 1 minute, with subtitles in [`docs/demo/demo.srt`](docs/demo/demo.srt). It walks through a replayed investigation from incident to report, then the results and checks.
+
 ## At a glance
 
 We compared the multi-agent system with a single agent that has the same tools, model, budget and evidence rules.
@@ -69,22 +71,28 @@ To change provider, change these values. No code changes are needed, for example
 | Calibration and cost report | `uv run python -m reliability.analysis` | No |
 | Check for regressions | `uv run python -m reliability.regression` | No |
 | Count coverage by category and difficulty | `uv run python -m reliability.coverage` | No |
-| Open the results viewer | `cd frontend && npm install && npm run dev` | No |
+| Open the viewer | `cd frontend && npm install && npm run dev` | No |
+| Record a replay for the viewer | `uv run python -m reliability.trace <incident>` | Yes |
 | Refresh the viewer's data after new results | `uv run python -m evals.export_web` | No |
 
 Evaluations stop starting new runs at `--max-tokens`, 2M by default. Runs already in progress still finish.
 
-### Results viewer
+### Viewer
 
-A small React app in `frontend/` shows the saved results. It makes no model calls and needs no backend.
+A React and Ant Design app in `frontend/`. It makes no model calls and needs no backend.
 
 | Page | Shows |
 |---|---|
-| Overview | Both evaluations side by side, with every incident's runs |
-| Incidents | Any of the 36 incidents: its logs, metric charts, changes and past incidents, what each system concluded, and a button to reveal the correct answer |
+| Investigation replay | A recorded investigation, step by step from incident to report: the plan, every tool call, findings, competing causes, Verifier labels, the Critic's verdict and the final report. Play, pause or jump to any step |
+| Results | Both evaluations side by side, with every incident's runs |
+| Test incidents | Any of the 36 incidents, with logs, metric charts and changes, and a button to reveal the correct answer |
 | Offline checks | Rule evaluation, metamorphic tests and coverage |
+| Requirements | Each assignment requirement and where to see it |
 
-Run `cd frontend && npm install && npm run dev`, then open the address it prints. It reads `frontend/public/data.json`, which `evals.export_web` writes from the saved results. CI fails if that file is out of date.
+Run `cd frontend && npm install && npm run dev`, then open the address it prints.
+
+- **Replays:** 4 recorded runs: INC-01, INC-03, INC-08 and BLIND-15, about 133k tokens to record. They are real runs, so two of them miss the right cause. Record more with `uv run python -m reliability.trace <incident>`, which makes model calls.
+- **Results data:** `frontend/public/data.json`, written by `uv run python -m evals.export_web`. CI fails if it is out of date.
 
 ### Sample output
 
@@ -524,7 +532,8 @@ reliability/        Extras: safety, offline evals, calibration, regression gate,
 tests/core/         Tests for the core
 tests/reliability/  Tests for the extras
 cli.py              Investigate one incident
-frontend/           Results viewer (React and Vite)
+frontend/           Viewer (React, Vite, Ant Design)
+docs/demo/          Demo video and subtitles
 ```
 
 The core does not import the extras, and a test enforces this. `cli.py` and `evals` both use `reliability/`, so redaction and the risky-action flag are on in every reported result.
@@ -542,6 +551,6 @@ GitHub Actions runs lint, format checks and all tests on every push, using fake 
 | LangChain | Agents, provider switching, middleware | Yes |
 | SQLite, through `langgraph-checkpoint-sqlite` | Crash recovery | Yes |
 | Pydantic, PyYAML, python-dotenv | Data contracts, test sets, settings | Yes |
-| React and Vite, with Node.js 22 | Results viewer | Only for the viewer |
+| React, Vite and Ant Design, with Node.js 22 | Viewer | Only for the viewer |
 
 Incident text and tool output are sent to the LLM provider after redaction. Check your provider's data terms before using real logs, because free tiers may allow providers to use your data.
